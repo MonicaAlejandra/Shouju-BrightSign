@@ -17,7 +17,7 @@ Keep `index.html`, `styles.css`, `app.js`, and the `assets` folder together. Do 
 
 The `fonts` folder contains a local Noto Sans JP variable font so Japanese button labels render consistently on BrightSignOS. Keep this folder with the site when publishing.
 
-Action buttons use a continuous multi-stage blend from gray through a pale white highlight into red, without an immediate browser press-color jump, then briefly hold the pressed color. Every page change uses a GPU-friendly soft dissolve without the white gradient, including changes made with the bottom navigation tabs. Navigation tabs keep their existing green selected-state behavior.
+Action buttons use a continuous multi-stage blend from gray through a pale white highlight into red, without an immediate browser press-color jump, then briefly hold the pressed color. For buttons that change pages, the page dissolve begins just before the button reaches its final red color so the two animations overlap smoothly. Every page change uses a GPU-friendly soft dissolve without the white gradient, including changes made with the bottom navigation tabs. Navigation tabs keep their existing green selected-state behavior.
 
 The 24 introduction-selection buttons map in row order to `assets/video-playback-01.png` through `assets/video-playback-24.png`. This includes the six enabled `予備` buttons, mapped to panels 19–24.
 

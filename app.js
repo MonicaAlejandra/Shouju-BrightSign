@@ -3,8 +3,10 @@
 
   var DESIGN_WIDTH = 1280;
   var DESIGN_HEIGHT = 800;
-  var BUTTON_FEEDBACK_MS = 780;
-  var PAGE_TRANSITION_MS = 700;
+  var BUTTON_ACTION_DELAY_MS = 750;
+  var BUTTON_COLOR_REMAINDER_MS = 150;
+  var BUTTON_FEEDBACK_MS = 1050;
+  var PAGE_TRANSITION_MS = 950;
   var udpConfig = window.BRIGHTSIGN_UDP_CONFIG || {};
 
   var pages = {
@@ -193,6 +195,7 @@
 
   function addButton(options) {
     var button = document.createElement("button");
+    var actionTimer = 0;
     var feedbackTimer = 0;
     var feedbackActive = false;
     button.type = "button";
@@ -222,9 +225,14 @@
         if (feedbackActive) return;
         feedbackActive = true;
         button.classList.add("pressed");
+        window.clearTimeout(actionTimer);
         window.clearTimeout(feedbackTimer);
+        if (options.onClick) {
+          actionTimer = window.setTimeout(function () {
+            options.onClick();
+          }, BUTTON_ACTION_DELAY_MS);
+        }
         feedbackTimer = window.setTimeout(function () {
-          if (options.onClick) options.onClick();
           if (button.isConnected) {
             button.classList.remove("pressed");
             feedbackActive = false;
@@ -399,6 +407,16 @@
     var outgoingPage = document.createElement("div");
     var outgoingImage = panelImage.cloneNode(true);
     var outgoingButtons = buttonLayer.cloneNode(true);
+    var sourceButtonElements = buttonLayer.querySelectorAll(".ui-button");
+    var clonedButtonElements = outgoingButtons.querySelectorAll(".ui-button");
+    var finishingButtons = [];
+
+    for (var buttonIndex = 0; buttonIndex < sourceButtonElements.length; buttonIndex += 1) {
+      var sourceButton = sourceButtonElements[buttonIndex];
+      var clonedButton = clonedButtonElements[buttonIndex];
+      clonedButton.style.setProperty("background-color", window.getComputedStyle(sourceButton).backgroundColor, "important");
+      if (sourceButton.classList.contains("pressed")) finishingButtons.push(clonedButton);
+    }
 
     outgoingPage.className = "page-transition-overlay transition-page";
     outgoingImage.removeAttribute("id");
@@ -411,7 +429,11 @@
     stage.appendChild(outgoingPage);
 
     renderPage(pageName);
-    void stage.offsetWidth;
+    void outgoingPage.offsetWidth;
+    for (var finishingIndex = 0; finishingIndex < finishingButtons.length; finishingIndex += 1) {
+      finishingButtons[finishingIndex].style.setProperty("transition", "background-color " + BUTTON_COLOR_REMAINDER_MS + "ms linear", "important");
+      finishingButtons[finishingIndex].style.setProperty("background-color", "var(--power-red)", "important");
+    }
     stage.classList.add("page-transitioning");
 
     pageTransitionTimer = window.setTimeout(function () {
