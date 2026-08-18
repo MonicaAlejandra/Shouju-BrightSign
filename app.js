@@ -346,12 +346,19 @@
     });
   }
 
+  function bdArrowIcon(rotation) {
+    return '<svg class="bd-arrow-icon" viewBox="0 0 64 64" aria-hidden="true">' +
+      '<g transform="rotate(' + rotation + ' 32 32)">' +
+      '<path d="M32 5 L13 25 L24 25 L24 58 L40 58 L40 25 L51 25 Z"></path>' +
+      '</g></svg>';
+  }
+
   function addBdNavigationControls() {
     addButton({ label: "BACK", className: "bd-text-button", x: 68, y: 223, width: 220, height: 100, content: "BACK" });
-    addButton({ label: "上", className: "bd-arrow-button", x: 530, y: 223, width: 220, height: 100, content: "<span>↑</span>" });
-    addButton({ label: "左", className: "bd-arrow-button", x: 408, y: 347, width: 220, height: 100, content: "<span>←</span>" });
-    addButton({ label: "右", className: "bd-arrow-button", x: 652, y: 347, width: 220, height: 100, content: "<span>→</span>" });
-    addButton({ label: "下", className: "bd-arrow-button", x: 530, y: 471, width: 220, height: 100, content: "<span>↓</span>" });
+    addButton({ label: "上", className: "bd-arrow-button", x: 530, y: 223, width: 220, height: 100, content: bdArrowIcon(0) });
+    addButton({ label: "左", className: "bd-arrow-button", x: 408, y: 347, width: 220, height: 100, content: bdArrowIcon(-90) });
+    addButton({ label: "右", className: "bd-arrow-button", x: 652, y: 347, width: 220, height: 100, content: bdArrowIcon(90) });
+    addButton({ label: "下", className: "bd-arrow-button", x: 530, y: 471, width: 220, height: 100, content: bdArrowIcon(180) });
     addButton({ label: "OK", className: "bd-text-button", x: 992, y: 471, width: 220, height: 100, content: "OK" });
   }
 

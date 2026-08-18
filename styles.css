@@ -187,20 +187,22 @@ button {
 }
 
 .bd-arrow-button {
-  font-family: Arial, sans-serif;
-  font-size: 55px;
-  font-weight: 700;
-  line-height: 1;
+  line-height: 0;
 }
 
-.bd-arrow-button span {
-  color: #2e91e2;
-  -webkit-text-stroke: 1px #fff;
-  text-shadow:
-    -1px -1px 0 #fff,
-    1px -1px 0 #fff,
-    -1px 1px 0 #fff,
-    1px 1px 0 #fff;
+.bd-arrow-icon {
+  display: block;
+  width: 62px;
+  height: 62px;
+  overflow: visible;
+}
+
+.bd-arrow-icon path {
+  fill: #2e91e2;
+  stroke: #fff;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
 }
 
 .ui-button:not(.nav-button).pressed:not(:disabled) {
