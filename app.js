@@ -3,10 +3,12 @@
 
   var DESIGN_WIDTH = 1280;
   var DESIGN_HEIGHT = 800;
-  var BUTTON_ACTION_DELAY_MS = 750;
-  var BUTTON_COLOR_REMAINDER_MS = 150;
-  var BUTTON_FEEDBACK_MS = 1050;
-  var PAGE_TRANSITION_MS = 950;
+  var BUTTON_ACTION_DELAY_MS = 520;
+  var BUTTON_COLOR_REMAINDER_MS = 100;
+  var BUTTON_FEEDBACK_MS = 780;
+  var PAGE_TRANSITION_MS = 700;
+  var UDP_RECEIVER_INITIAL_DELAY_MS = 1500;
+  var UDP_RECEIVER_RETRY_MS = 5000;
   var udpConfig = window.BRIGHTSIGN_UDP_CONFIG || {};
 
   var pages = {
@@ -72,7 +74,8 @@
   var selectedPlaybackLabel = introButtons[0].ja;
   var isVideoPlaying = false;
   var udpReceiverSocket = null;
-  var lastBdTabTap = 0;
+  var udpReceiverRetryTimer = 0;
+  var udpReceiverStarting = false;
   var pageTransitionTimer = 0;
   var preloadedPageImages = [];
   function udpCommand(key, fallback) {
@@ -137,11 +140,31 @@
     }
   }
 
+  function scheduleUdpReceiverRetry() {
+    if (!udpConfig.receiveEnabled || typeof require !== "function") return;
+    if (udpReceiverSocket || udpReceiverStarting || udpReceiverRetryTimer) return;
+
+    udpReceiverRetryTimer = window.setTimeout(function () {
+      udpReceiverRetryTimer = 0;
+      startUdpReceiver();
+    }, UDP_RECEIVER_RETRY_MS);
+  }
+
+  function closeUdpReceiverSocket(socket) {
+    if (!socket) return;
+    try {
+      socket.close();
+    } catch (closeError) {
+      console.warn("UDP receiver close skipped: " + closeError.message);
+    }
+  }
+
   function startUdpReceiver() {
     var receivePort = Number(udpConfig.receivePort);
     var receiveHost = udpConfig.receiveHost || "0.0.0.0";
 
     if (!udpConfig.receiveEnabled || typeof require !== "function") return;
+    if (udpReceiverSocket || udpReceiverStarting) return;
     if (!receivePort || receivePort < 1 || receivePort > 65535) {
       console.error("UDP receive configuration error: set a valid receivePort.");
       return;
@@ -149,21 +172,33 @@
 
     try {
       var dgram = require("dgram");
-      udpReceiverSocket = dgram.createSocket("udp4");
-      udpReceiverSocket.on("message", function (message) {
+      var socket = dgram.createSocket("udp4");
+      udpReceiverSocket = socket;
+      udpReceiverStarting = true;
+
+      socket.on("message", function (message) {
         handleIncomingUdpCommand(message.toString("utf8"));
       });
-      udpReceiverSocket.on("error", function (error) {
-        console.error("UDP receive failed: " + error.message);
-        udpReceiverSocket.close();
-        udpReceiverSocket = null;
-      });
-      udpReceiverSocket.bind(receivePort, receiveHost, function () {
+      socket.once("listening", function () {
+        if (udpReceiverSocket !== socket) return;
+        udpReceiverStarting = false;
         console.log("UDP finish-command receiver listening on " + receiveHost + ":" + receivePort);
       });
+      socket.on("error", function (error) {
+        if (udpReceiverSocket !== socket) return;
+        console.error("UDP receive failed: " + error.message);
+        udpReceiverSocket = null;
+        udpReceiverStarting = false;
+        closeUdpReceiverSocket(socket);
+        scheduleUdpReceiverRetry();
+      });
+      socket.bind(receivePort, receiveHost);
     } catch (error) {
+      closeUdpReceiverSocket(udpReceiverSocket);
       udpReceiverSocket = null;
+      udpReceiverStarting = false;
       console.error("UDP receiver is unavailable: " + error.message);
+      scheduleUdpReceiverRetry();
     }
   }
 
@@ -261,8 +296,7 @@
             if (item.id === "bd") {
               handleBdTabTap();
             } else {
-              lastBdTabTap = 0;
-              showPage(item.id === "intro" && isVideoPlaying ? "playback" : item.page, true);
+              showPage(item.id === "intro" && isVideoPlaying ? "playback" : item.page, false);
             }
           }
         });
@@ -271,14 +305,15 @@
   }
 
   function handleBdTabTap() {
-    var now = Date.now();
-    if (now - lastBdTabTap <= 500) {
-      lastBdTabTap = 0;
-      showPage("bdNavigation", true);
-    } else {
-      lastBdTabTap = now;
-      showPage("bdDisc", true);
+    if (currentPage === "bdDisc") {
+      showPage("bdNavigation", false);
+      return;
     }
+    if (currentPage === "bdNavigation") {
+      showPage("bdDisc", false);
+      return;
+    }
+    showPage("bdDisc", false);
   }
 
   function addProjectorControls() {
@@ -445,14 +480,18 @@
   window.addEventListener("resize", resizeStage);
   window.addEventListener("orientationchange", resizeStage);
   window.addEventListener("beforeunload", function () {
-    if (udpReceiverSocket) udpReceiverSocket.close();
+    window.clearTimeout(udpReceiverRetryTimer);
+    udpReceiverRetryTimer = 0;
+    closeUdpReceiverSocket(udpReceiverSocket);
+    udpReceiverSocket = null;
+    udpReceiverStarting = false;
   });
   window.BRIGHTSIGN_PANEL = {
     receiveCommand: handleIncomingUdpCommand,
     videoIsPlaying: function () { return isVideoPlaying; }
   };
-  preloadPageImages();
   resizeStage();
   showPage("projector");
-  window.setTimeout(startUdpReceiver, 250);
+  window.setTimeout(preloadPageImages, 0);
+  window.setTimeout(startUdpReceiver, UDP_RECEIVER_INITIAL_DELAY_MS);
 }());

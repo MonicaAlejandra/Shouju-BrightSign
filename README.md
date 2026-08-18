@@ -17,7 +17,7 @@ Keep `index.html`, `styles.css`, `app.js`, and the `assets` folder together. Do 
 
 The `fonts` folder contains a local Noto Sans JP variable font so Japanese button labels render consistently on BrightSignOS. Keep this folder with the site when publishing.
 
-Action buttons use a continuous multi-stage blend from gray through a pale white highlight into red, without an immediate browser press-color jump, then briefly hold the pressed color. For buttons that change pages, the page dissolve begins just before the button reaches its final red color so the two animations overlap smoothly. Every page change uses a GPU-friendly soft dissolve without the white gradient, including changes made with the bottom navigation tabs. Navigation tabs keep their existing green selected-state behavior.
+Action buttons use a continuous multi-stage blend from gray through a pale white highlight into red, without an immediate browser press-color jump, then briefly hold the pressed color. For red buttons that change pages, the page dissolve begins just before the button reaches its final red color so the two animations overlap smoothly. Bottom navigation tabs change pages immediately without a page dissolve and keep their existing green selected-state behavior.
 
 The 24 introduction-selection buttons map in row order to `assets/video-playback-01.png` through `assets/video-playback-24.png`. This includes the six enabled `予備` buttons, mapped to panels 19–24.
 
@@ -39,6 +39,8 @@ Before testing, edit `udp-config.js`:
 5. Set `enabled: true` for sending and `receiveEnabled: true` for the finish-command receiver.
 
 UDP activity is written to the JavaScript console only, so no status label appears on the panel. A normal Chrome/Edge test cannot send or receive UDP; this is expected browser security behavior. The HTML receiver listens on port `5001` so it does not conflict with BrightAuthor's port `5000`. For a local state test, run `BRIGHTSIGN_PANEL.receiveCommand("VIDEO_FINISHED")` in the browser console.
+
+The first panel renders before the UDP receiver starts. If port `5001` is temporarily unavailable, the receiver failure is contained and the panel remains usable; the application retries the same port every five seconds without changing any UDP commands or destinations.
 
 To confirm packets on a Windows computer, run the included listener in PowerShell:
 
@@ -64,7 +66,7 @@ For a simple full-screen test, copy the contents of this folder to the root of a
 
 ## Current limitation
 
-Projector, BD, HDMI, and VGA controls are currently visual controls awaiting their separate protocol integration. Each introduction-video selection button sends its configured UDP command and shows its corresponding numbered playback panel. While a video is marked as playing, leaving and returning to the Introduction tab restores that playback panel. `STOP_VIDEO` from the on-screen button or the incoming `VIDEO_FINISHED` command clears the state. Tap the bottom **BD** tab twice consecutively to open the supplied BD navigation page. A single BD-tab tap opens the BD playback-control page. The BD navigation **BACK** button remains on the navigation page.
+Projector, BD, HDMI, and VGA controls are currently visual controls awaiting their separate protocol integration. Each introduction-video selection button sends its configured UDP command and shows its corresponding numbered playback panel. While a video is marked as playing, leaving and returning to the Introduction tab restores that playback panel. `STOP_VIDEO` from the on-screen button or the incoming `VIDEO_FINISHED` command clears the state. The first **BD** tab tap from another tab opens the playback-control page. When BD is already selected, each normal BD-tab tap toggles between the playback-control and navigation pages. The BD navigation **BACK** button remains on the navigation page.
 
 Official references:
 
