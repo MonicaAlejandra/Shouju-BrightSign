@@ -274,9 +274,9 @@
   }
 
   function addProjectorControls() {
-    addButton({ label: "プロジェクター ON", className: "power-button", x: 48, y: 194, width: 220, height: 100, content: "ON", onClick: function () { sendUdpCommand(udpCommand("projectorOn", "PROJECTOR_ON")); } });
-    addButton({ label: "プロジェクター OFF", className: "power-button", x: 310, y: 194, width: 220, height: 100, content: "OFF", onClick: function () { sendUdpCommand(udpCommand("projectorOff", "PROJECTOR_OFF")); } });
-    addButton({ label: "MUTE", className: "power-button", x: 968, y: 194, width: 220, height: 100, content: "MUTE", onClick: function () { sendUdpCommand(udpCommand("projectorMute", "PROJECTOR_MUTE")); } });
+    addButton({ label: "プロジェクター ON", className: "power-button", x: 48, y: 194, width: 220, height: 100, content: "ON" });
+    addButton({ label: "プロジェクター OFF", className: "power-button", x: 310, y: 194, width: 220, height: 100, content: "OFF" });
+    addButton({ label: "MUTE", className: "power-button", x: 968, y: 194, width: 220, height: 100, content: "MUTE" });
   }
 
   function addIntroControls() {
@@ -333,8 +333,7 @@
       y: 385,
       width: 220,
       height: 124,
-      content: '<span class="label">再生</span><span class="disc-icon"><span class="play-triangle"></span></span>',
-      onClick: function () { sendUdpCommand(udpCommand("bdPlay", "BD_PLAY")); }
+      content: '<span class="label">再生</span><span class="disc-icon"><span class="play-triangle"></span></span>'
     });
     addButton({
       label: "停止",
@@ -343,18 +342,17 @@
       y: 385,
       width: 220,
       height: 124,
-      content: '<span class="label">停止</span><span class="disc-icon"><span class="stop-square"></span></span>',
-      onClick: function () { sendUdpCommand(udpCommand("bdStop", "BD_STOP")); }
+      content: '<span class="label">停止</span><span class="disc-icon"><span class="stop-square"></span></span>'
     });
   }
 
   function addBdNavigationControls() {
-    addButton({ label: "BACK", className: "bd-text-button", x: 68, y: 223, width: 220, height: 100, content: "BACK", onClick: function () { sendUdpCommand(udpCommand("bdMenuBack", "BD_MENU_BACK")); } });
-    addButton({ label: "上", className: "bd-arrow-button", x: 530, y: 223, width: 220, height: 100, content: "<span>↑</span>", onClick: function () { sendUdpCommand(udpCommand("bdMenuUp", "BD_MENU_UP")); } });
-    addButton({ label: "左", className: "bd-arrow-button", x: 408, y: 347, width: 220, height: 100, content: "<span>←</span>", onClick: function () { sendUdpCommand(udpCommand("bdMenuLeft", "BD_MENU_LEFT")); } });
-    addButton({ label: "右", className: "bd-arrow-button", x: 652, y: 347, width: 220, height: 100, content: "<span>→</span>", onClick: function () { sendUdpCommand(udpCommand("bdMenuRight", "BD_MENU_RIGHT")); } });
-    addButton({ label: "下", className: "bd-arrow-button", x: 530, y: 471, width: 220, height: 100, content: "<span>↓</span>", onClick: function () { sendUdpCommand(udpCommand("bdMenuDown", "BD_MENU_DOWN")); } });
-    addButton({ label: "OK", className: "bd-text-button", x: 992, y: 471, width: 220, height: 100, content: "OK", onClick: function () { sendUdpCommand(udpCommand("bdMenuOk", "BD_MENU_OK")); } });
+    addButton({ label: "BACK", className: "bd-text-button", x: 68, y: 223, width: 220, height: 100, content: "BACK" });
+    addButton({ label: "上", className: "bd-arrow-button", x: 530, y: 223, width: 220, height: 100, content: "<span>↑</span>" });
+    addButton({ label: "左", className: "bd-arrow-button", x: 408, y: 347, width: 220, height: 100, content: "<span>←</span>" });
+    addButton({ label: "右", className: "bd-arrow-button", x: 652, y: 347, width: 220, height: 100, content: "<span>→</span>" });
+    addButton({ label: "下", className: "bd-arrow-button", x: 530, y: 471, width: 220, height: 100, content: "<span>↓</span>" });
+    addButton({ label: "OK", className: "bd-text-button", x: 992, y: 471, width: 220, height: 100, content: "OK" });
   }
 
   function removeTransitionOverlays() {

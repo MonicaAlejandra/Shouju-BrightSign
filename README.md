@@ -23,12 +23,12 @@ The 24 introduction-selection buttons map in row order to `assets/video-playback
 
 ## UDP command test
 
-The control buttons now send configurable UTF-8 UDP text packets when the panel runs in a BrightSign HTML widget with **Node.js enabled**. The following buttons are mapped:
+UDP is used only by the introduction-video section when the panel runs in a BrightSign HTML widget with **Node.js enabled**:
 
-- Projector: ON, OFF, MUTE
 - Introduction videos: `PLAY_1` through `PLAY_24`
 - Video playback: `STOP_VIDEO`; incoming `VIDEO_FINISHED` clears the playing state
-- BD: play, stop, menu directions/OK, and BACK
+
+Projector, BD, HDMI, and VGA controls keep their normal button feedback and navigation, but do not send UDP. Their control protocol can be connected separately without changing the introduction-video UDP functions.
 
 Before testing, edit `udp-config.js`:
 
@@ -64,7 +64,7 @@ For a simple full-screen test, copy the contents of this folder to the root of a
 
 ## Current limitation
 
-Projector and BD button presses can now send UDP commands when configured as above. PC switching and video playback remain simulated; each video-selection button sends its configured UDP command and shows its corresponding numbered playback panel. While a video is marked as playing, leaving and returning to the Introduction tab restores that playback panel. `STOP_VIDEO` from the on-screen button or the incoming `VIDEO_FINISHED` command clears the state. Tap the bottom **BD** tab twice consecutively to open the supplied BD navigation page. A single BD-tab tap opens the BD playback-control page. The BD navigation **BACK** button sends `BD_MENU_BACK` and remains on the navigation page.
+Projector, BD, HDMI, and VGA controls are currently visual controls awaiting their separate protocol integration. Each introduction-video selection button sends its configured UDP command and shows its corresponding numbered playback panel. While a video is marked as playing, leaving and returning to the Introduction tab restores that playback panel. `STOP_VIDEO` from the on-screen button or the incoming `VIDEO_FINISHED` command clears the state. Tap the bottom **BD** tab twice consecutively to open the supplied BD navigation page. A single BD-tab tap opens the BD playback-control page. The BD navigation **BACK** button remains on the navigation page.
 
 Official references:
 
