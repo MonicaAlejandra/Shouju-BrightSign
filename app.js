@@ -68,6 +68,8 @@
   var currentPage = "projector";
   var selectedPlaybackImage = "assets/video-playback-01.png";
   var selectedPlaybackLabel = introButtons[0].ja;
+  var isVideoPlaying = false;
+  var udpReceiverSocket = null;
   var lastBdTabTap = 0;
   var pageTransitionTimer = 0;
   var preloadedPageImages = [];
@@ -113,6 +115,53 @@
     } catch (error) {
       console.error("UDP is unavailable: " + error.message);
       return false;
+    }
+  }
+
+  function finishVideoPlayback(source) {
+    if (!isVideoPlaying) return;
+    isVideoPlaying = false;
+    console.log("Introduction video finished: " + source);
+    if (currentPage === "playback") showPage("intro", true);
+  }
+
+  function handleIncomingUdpCommand(message) {
+    var command = String(message || "").replace(/[\0\r\n]+$/g, "").trim();
+    if (!command) return;
+
+    console.log("UDP received: " + command);
+    if (command === udpCommand("videoFinished", "VIDEO_FINISHED")) {
+      finishVideoPlayback("UDP " + command);
+    }
+  }
+
+  function startUdpReceiver() {
+    var receivePort = Number(udpConfig.receivePort);
+    var receiveHost = udpConfig.receiveHost || "0.0.0.0";
+
+    if (!udpConfig.receiveEnabled || typeof require !== "function") return;
+    if (!receivePort || receivePort < 1 || receivePort > 65535) {
+      console.error("UDP receive configuration error: set a valid receivePort.");
+      return;
+    }
+
+    try {
+      var dgram = require("dgram");
+      udpReceiverSocket = dgram.createSocket("udp4");
+      udpReceiverSocket.on("message", function (message) {
+        handleIncomingUdpCommand(message.toString("utf8"));
+      });
+      udpReceiverSocket.on("error", function (error) {
+        console.error("UDP receive failed: " + error.message);
+        udpReceiverSocket.close();
+        udpReceiverSocket = null;
+      });
+      udpReceiverSocket.bind(receivePort, receiveHost, function () {
+        console.log("UDP finish-command receiver listening on " + receiveHost + ":" + receivePort);
+      });
+    } catch (error) {
+      udpReceiverSocket = null;
+      console.error("UDP receiver is unavailable: " + error.message);
     }
   }
 
@@ -205,7 +254,7 @@
               handleBdTabTap();
             } else {
               lastBdTabTap = 0;
-              showPage(item.page, true);
+              showPage(item.id === "intro" && isVideoPlaying ? "playback" : item.page, true);
             }
           }
         });
@@ -250,7 +299,8 @@
           onClick: function () {
             selectedPlaybackImage = getPlaybackImagePath(itemIndex);
             selectedPlaybackLabel = item.ja;
-            var prefix = udpCommand("videoPrefix", "PLAY_VIDEO_");
+            isVideoPlaying = true;
+            var prefix = udpCommand("videoPrefix", "PLAY_");
             sendUdpCommand(prefix + String(itemIndex + 1));
             showPage("playback", true);
           }
@@ -270,7 +320,7 @@
       content: "再生中止",
       onClick: function () {
         sendUdpCommand(udpCommand("videoStop", "STOP_VIDEO"));
-        showPage("intro", true);
+        finishVideoPlayback("STOP button");
       }
     });
   }
@@ -299,7 +349,7 @@
   }
 
   function addBdNavigationControls() {
-    addButton({ label: "BACK", className: "bd-text-button", x: 68, y: 223, width: 220, height: 100, content: "BACK", onClick: function () { showPage("bdDisc", true); } });
+    addButton({ label: "BACK", className: "bd-text-button", x: 68, y: 223, width: 220, height: 100, content: "BACK", onClick: function () { sendUdpCommand(udpCommand("bdMenuBack", "BD_MENU_BACK")); } });
     addButton({ label: "上", className: "bd-arrow-button", x: 530, y: 223, width: 220, height: 100, content: "<span>↑</span>", onClick: function () { sendUdpCommand(udpCommand("bdMenuUp", "BD_MENU_UP")); } });
     addButton({ label: "左", className: "bd-arrow-button", x: 408, y: 347, width: 220, height: 100, content: "<span>←</span>", onClick: function () { sendUdpCommand(udpCommand("bdMenuLeft", "BD_MENU_LEFT")); } });
     addButton({ label: "右", className: "bd-arrow-button", x: 652, y: 347, width: 220, height: 100, content: "<span>→</span>", onClick: function () { sendUdpCommand(udpCommand("bdMenuRight", "BD_MENU_RIGHT")); } });
@@ -367,7 +417,15 @@
 
   window.addEventListener("resize", resizeStage);
   window.addEventListener("orientationchange", resizeStage);
+  window.addEventListener("beforeunload", function () {
+    if (udpReceiverSocket) udpReceiverSocket.close();
+  });
+  window.BRIGHTSIGN_PANEL = {
+    receiveCommand: handleIncomingUdpCommand,
+    videoIsPlaying: function () { return isVideoPlaying; }
+  };
   preloadPageImages();
   resizeStage();
   showPage("projector");
+  window.setTimeout(startUdpReceiver, 250);
 }());

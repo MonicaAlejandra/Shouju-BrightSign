@@ -26,18 +26,19 @@ The 24 introduction-selection buttons map in row order to `assets/video-playback
 The control buttons now send configurable UTF-8 UDP text packets when the panel runs in a BrightSign HTML widget with **Node.js enabled**. The following buttons are mapped:
 
 - Projector: ON, OFF, MUTE
-- Introduction videos: `PLAY_VIDEO_1` through `PLAY_VIDEO_18`
-- Video playback: STOP
-- BD: play, stop, and menu directions/OK
+- Introduction videos: `PLAY_1` through `PLAY_24`
+- Video playback: `STOP_VIDEO`; incoming `VIDEO_FINISHED` clears the playing state
+- BD: play, stop, menu directions/OK, and BACK
 
 Before testing, edit `udp-config.js`:
 
 1. Set `host` to the IP address of the UDP receiver.
 2. Set `port` to the receiver's UDP port.
-3. Replace the command strings with the exact commands required by the target device or controller.
-4. Set `enabled: true`.
+3. Send the video-finished command to the BrightSign on UDP port `5001`. BrightAuthor continues to use port `5000`.
+4. Replace the command strings, including `videoFinished`, with the exact commands required by the target device or controller.
+5. Set `enabled: true` for sending and `receiveEnabled: true` for the finish-command receiver.
 
-UDP activity is written to the JavaScript console only, so no status label appears on the panel. A normal Chrome/Edge test cannot send UDP; the console will report that the BrightSign Node.js runtime is unavailable. This is expected browser security behavior.
+UDP activity is written to the JavaScript console only, so no status label appears on the panel. A normal Chrome/Edge test cannot send or receive UDP; this is expected browser security behavior. The HTML receiver listens on port `5001` so it does not conflict with BrightAuthor's port `5000`. For a local state test, run `BRIGHTSIGN_PANEL.receiveCommand("VIDEO_FINISHED")` in the browser console.
 
 To confirm packets on a Windows computer, run the included listener in PowerShell:
 
@@ -54,7 +55,7 @@ Set the computer's LAN address as `host` in `udp-config.js`, deploy the site to 
 3. Add an HTML5 state/widget to the full-screen zone.
 4. Set Site Source to Local Site and select this folder's `index.html`.
 5. Enable **Mouse and Touch Events**. Enable **Display Cursor** when testing with a USB mouse.
-6. For the visual-only simulation, leave BrightSign JavaScript Objects disabled. For UDP control, enable **Node.js** for the HTML widget/presentation, as required by the BrightSign player configuration. The page uses Node's `dgram` API to send packets.
+6. For the visual-only simulation, leave BrightSign JavaScript Objects disabled. For UDP control, enable **Node.js** for the HTML widget/presentation, as required by the BrightSign player configuration. The page uses Node's `dgram` API to send and receive packets.
 7. Publish using Standalone or Local Network mode.
 
 ## Run without BrightSign Author
@@ -63,7 +64,7 @@ For a simple full-screen test, copy the contents of this folder to the root of a
 
 ## Current limitation
 
-Projector and BD button presses can now send UDP commands when configured as above. PC switching and video playback remain simulated; each video-selection button sends its configured UDP command and shows its corresponding numbered playback panel. Tap the bottom **BD** tab twice consecutively to open the supplied BD navigation page. A single BD-tab tap opens the BD playback-control page, and **Back** returns to that page.
+Projector and BD button presses can now send UDP commands when configured as above. PC switching and video playback remain simulated; each video-selection button sends its configured UDP command and shows its corresponding numbered playback panel. While a video is marked as playing, leaving and returning to the Introduction tab restores that playback panel. `STOP_VIDEO` from the on-screen button or the incoming `VIDEO_FINISHED` command clears the state. Tap the bottom **BD** tab twice consecutively to open the supplied BD navigation page. A single BD-tab tap opens the BD playback-control page. The BD navigation **BACK** button sends `BD_MENU_BACK` and remains on the navigation page.
 
 Official references:
 
