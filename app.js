@@ -333,7 +333,7 @@
         var row = Math.floor(itemIndex / 4);
         addButton({
           label: item.ja,
-          className: "intro-button",
+          className: "intro-button" + (item.spare ? " spare-button" : itemIndex >= 16 ? " category-button" : ""),
           x: columns[column],
           y: rows[row],
           width: widths[column],

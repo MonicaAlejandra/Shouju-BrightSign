@@ -11,6 +11,9 @@
   --button-gray: #676968;
   --active-green: #3fae7b;
   --nav-dark: #282c2d;
+  --intro-orange: #ffb300;
+  --intro-pink: #df72a1;
+  --intro-blue: #38a7db;
   --power-red: #d32f2f;
 }
 
@@ -93,13 +96,13 @@ button {
 
 .power-button {
   font-family: Arial, sans-serif;
-  font-size: 34px;
+  font-size: 28px;
   font-weight: 700;
 }
 
 .nav-button {
   background: var(--nav-dark);
-  font-size: 31px;
+  font-size: 26px;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -109,15 +112,25 @@ button {
 }
 
 .intro-button {
+  --intro-button-color: var(--intro-orange);
+  background: var(--intro-button-color);
   flex-direction: column;
-  gap: 1px;
+  gap: 4px;
+}
+
+.intro-button.category-button {
+  --intro-button-color: var(--intro-pink);
+}
+
+.intro-button.spare-button {
+  --intro-button-color: var(--intro-blue);
 }
 
 .intro-button .ja {
   display: block;
   max-width: 96%;
   overflow: hidden;
-  font-size: 21px;
+  font-size: 20px;
   font-weight: 700;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -126,7 +139,7 @@ button {
 
 .intro-button .en {
   display: block;
-  color: #c5c5c5;
+  color: #fff;
   font-family: Arial, sans-serif;
   font-size: 14px;
   font-weight: 400;
@@ -135,17 +148,17 @@ button {
 }
 
 .playback-stop {
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 700;
 }
 
 .bd-playback-button {
   flex-direction: column;
-  gap: 13px;
+  gap: 22px;
 }
 
 .bd-playback-button .label {
-  font-size: 32px;
+  font-size: 27px;
   font-weight: 700;
   line-height: 1;
 }
@@ -181,8 +194,7 @@ button {
 }
 
 .bd-text-button {
-  font-family: Arial, sans-serif;
-  font-size: 32px;
+  font-size: 26px;
   font-weight: 700;
 }
 
@@ -211,6 +223,10 @@ button {
 
 .ui-button:not(.nav-button).pressed:not(:disabled) {
   animation: button-color-crossfade 620ms linear forwards;
+}
+
+.ui-button.intro-button.pressed:not(:disabled) {
+  animation-name: intro-button-color-crossfade;
 }
 
 .page-transition-overlay {
@@ -274,6 +290,32 @@ button {
 
   36% {
     background-color: #b6b7b6;
+  }
+
+  50% {
+    background-color: #eeeeee;
+  }
+
+  62% {
+    background-color: #f0d9d7;
+  }
+
+  76% {
+    background-color: #eb9a94;
+  }
+
+  90% {
+    background-color: #df5f57;
+  }
+
+  100% {
+    background-color: var(--power-red);
+  }
+}
+
+@keyframes intro-button-color-crossfade {
+  0% {
+    background-color: var(--intro-button-color);
   }
 
   50% {
