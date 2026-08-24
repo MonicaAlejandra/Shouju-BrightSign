@@ -10,6 +10,7 @@
   var UDP_RECEIVER_INITIAL_DELAY_MS = 1500;
   var UDP_RECEIVER_RETRY_MS = 5000;
   var udpConfig = window.BRIGHTSIGN_UDP_CONFIG || {};
+  var projectorConfig = window.BRIGHTSIGN_PROJECTOR_CONFIG || {};
 
   var pages = {
     projector: { image: "assets/projector-control-panel.png", alt: "プロジェクター操作" },
@@ -121,6 +122,142 @@
       console.error("UDP is unavailable: " + error.message);
       return false;
     }
+  }
+
+  function sendPjLinkCommand(command, callback) {
+    var host = projectorConfig.host;
+    var port = Number(projectorConfig.port || 4352);
+    var timeoutMs = Number(projectorConfig.timeoutMs || 5000);
+    var complete = typeof callback === "function" ? callback : function () {};
+    var settled = false;
+    var socket = null;
+    var buffer = "";
+    var waitingForGreeting = true;
+    var commandName = String(command || "").split(" ")[0];
+
+    function finish(error, response) {
+      if (settled) return;
+      settled = true;
+      if (socket && !socket.destroyed) socket.destroy();
+      if (error) {
+        console.error("PJLink " + commandName + " failed: " + error.message);
+      } else {
+        console.log("PJLink " + commandName + " response from " + host + ":" + port + " — " + response);
+      }
+      complete(error, response);
+    }
+
+    if (!projectorConfig.enabled) {
+      finish(new Error("projector control is disabled in projector-config.js"));
+      return false;
+    }
+
+    if (!host || !port || port < 1 || port > 65535) {
+      finish(new Error("set a valid projector host and port in projector-config.js"));
+      return false;
+    }
+
+    if (!timeoutMs || timeoutMs < 250) {
+      finish(new Error("set timeoutMs to 250 or greater in projector-config.js"));
+      return false;
+    }
+
+    if (!/^(?:POWR [01?]|AVMT (?:3[01]|\?))$/.test(command)) {
+      finish(new Error("unsupported PJLink command"));
+      return false;
+    }
+
+    if (typeof require !== "function") {
+      finish(new Error("this browser has no BrightSign Node.js runtime"));
+      return false;
+    }
+
+    try {
+      var net = require("net");
+      var crypto = require("crypto");
+
+      socket = net.createConnection({ host: host, port: port });
+      socket.setEncoding("utf8");
+      socket.setTimeout(timeoutMs);
+
+      socket.on("data", function (data) {
+        buffer += data;
+
+        while (buffer.indexOf("\r") !== -1 && !settled) {
+          var delimiterIndex = buffer.indexOf("\r");
+          var line = buffer.slice(0, delimiterIndex).replace(/\n/g, "").trim();
+          buffer = buffer.slice(delimiterIndex + 1);
+
+          if (waitingForGreeting) {
+            var greeting = /^PJLINK ([01])(?: ([0-9a-fA-F]{8}))?$/.exec(line);
+            if (!greeting) {
+              finish(new Error("unexpected projector greeting: " + line));
+              return;
+            }
+
+            waitingForGreeting = false;
+            var authenticationPrefix = "";
+            if (greeting[1] === "1") {
+              if (!greeting[2]) {
+                finish(new Error("PJLink authentication challenge was missing"));
+                return;
+              }
+              authenticationPrefix = crypto
+                .createHash("md5")
+                .update(greeting[2] + String(projectorConfig.password || ""), "utf8")
+                .digest("hex");
+            }
+            socket.write(authenticationPrefix + "%1" + command + "\r", "utf8");
+            continue;
+          }
+
+          if (line === "PJLINK ERRA") {
+            finish(new Error("authentication failed; check the PJLink password"));
+            return;
+          }
+
+          var expectedPrefix = "%1" + commandName + "=";
+          if (line.indexOf(expectedPrefix) !== 0) {
+            finish(new Error("unexpected projector response: " + line));
+            return;
+          }
+
+          var value = line.slice(expectedPrefix.length);
+          if (/^ERR[1-4]$/.test(value)) {
+            finish(new Error("projector returned " + value));
+            return;
+          }
+
+          finish(null, value);
+        }
+      });
+
+      socket.on("timeout", function () {
+        finish(new Error("connection timed out"));
+      });
+      socket.on("error", function (error) {
+        finish(error);
+      });
+      socket.on("end", function () {
+        if (!settled) finish(new Error("projector closed the connection before replying"));
+      });
+      return true;
+    } catch (error) {
+      finish(error);
+      return false;
+    }
+  }
+
+  function setProjectorPower(turnOn) {
+    sendPjLinkCommand("POWR " + (turnOn ? "1" : "0"));
+  }
+
+  function toggleProjectorMute() {
+    sendPjLinkCommand("AVMT ?", function (queryError, currentValue) {
+      if (queryError) return;
+      var muteIsActive = currentValue === "11" || currentValue === "21" || currentValue === "31";
+      sendPjLinkCommand("AVMT " + (muteIsActive ? "30" : "31"));
+    });
   }
 
   function finishVideoPlayback(source) {
@@ -317,9 +454,36 @@
   }
 
   function addProjectorControls() {
-    addButton({ label: "プロジェクター ON", className: "power-button", x: 48, y: 194, width: 220, height: 100, content: "ON" });
-    addButton({ label: "プロジェクター OFF", className: "power-button", x: 310, y: 194, width: 220, height: 100, content: "OFF" });
-    addButton({ label: "MUTE", className: "power-button", x: 968, y: 194, width: 220, height: 100, content: "MUTE" });
+    addButton({
+      label: "プロジェクター ON",
+      className: "power-button",
+      x: 48,
+      y: 194,
+      width: 220,
+      height: 100,
+      content: "ON",
+      onClick: function () { setProjectorPower(true); }
+    });
+    addButton({
+      label: "プロジェクター OFF",
+      className: "power-button",
+      x: 310,
+      y: 194,
+      width: 220,
+      height: 100,
+      content: "OFF",
+      onClick: function () { setProjectorPower(false); }
+    });
+    addButton({
+      label: "MUTE",
+      className: "power-button",
+      x: 968,
+      y: 194,
+      width: 220,
+      height: 100,
+      content: "MUTE",
+      onClick: toggleProjectorMute
+    });
   }
 
   function addIntroControls() {
@@ -344,7 +508,9 @@
             selectedPlaybackLabel = item.ja;
             isVideoPlaying = true;
             var prefix = udpCommand("videoPrefix", "PLAY_");
-            sendUdpCommand(prefix + String(itemIndex + 1));
+            var videoNumber = itemIndex + 1;
+            var formattedVideoNumber = videoNumber < 10 ? "0" + videoNumber : String(videoNumber);
+            sendUdpCommand(prefix + formattedVideoNumber);
             showPage("playback", true);
           }
         });
@@ -488,7 +654,8 @@
   });
   window.BRIGHTSIGN_PANEL = {
     receiveCommand: handleIncomingUdpCommand,
-    videoIsPlaying: function () { return isVideoPlaying; }
+    videoIsPlaying: function () { return isVideoPlaying; },
+    sendProjectorCommand: sendPjLinkCommand
   };
   resizeStage();
   showPage("projector");

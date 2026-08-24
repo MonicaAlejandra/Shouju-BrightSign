@@ -5,14 +5,14 @@
  */
 window.BRIGHTSIGN_UDP_CONFIG = {
   enabled: true,
-  host: "192.180.10.109",
-  port: 5000,
+  host: "192.180.10.111",
+  port: 5001,
   receiveEnabled: true,
   receiveHost: "0.0.0.0",
-  receivePort: 5001,
+  receivePort: 5000,
   commands: {
-    videoPrefix: "PLAY_",
-    videoStop: "STOP_VIDEO",
-    videoFinished: "VIDEO_FINISHED"
+    videoPrefix: "BS_PLAY",
+    videoStop: "BS_STOP",
+    videoFinished: "BS_HOME"
   }
 };

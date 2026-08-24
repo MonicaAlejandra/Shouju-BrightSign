@@ -28,7 +28,27 @@ UDP is used only by the introduction-video section when the panel runs in a Brig
 - Introduction videos: `PLAY_1` through `PLAY_24`
 - Video playback: `STOP_VIDEO`; incoming `VIDEO_FINISHED` clears the playing state
 
-Projector, BD, HDMI, and VGA controls keep their normal button feedback and navigation, but do not send UDP. Their control protocol can be connected separately without changing the introduction-video UDP functions.
+BD, HDMI, and VGA controls keep their normal button feedback and navigation, but do not send UDP. Projector control uses PJLink separately from the introduction-video UDP functions.
+
+## Projector control (PJLink)
+
+The Panasonic PT-REZ80 is controlled over PJLink Class 2 using TCP. The panel supports both PJLink authentication modes: no authentication and the standard MD5 challenge-response mode.
+
+Before testing, edit `projector-config.js`:
+
+1. Set `host` to the projector's IP address.
+2. Leave `port` at the PJLink default, `4352`, unless the installation settings require another port.
+3. Set `password` to the password configured for PJLink on the projector. Leave it empty only when the projector has no PJLink password.
+4. Set `enabled: true` after confirming the address and password.
+5. Keep Node.js enabled for the BrightSign HTML widget/presentation. A normal Chrome/Edge browser cannot open the required TCP socket.
+
+The buttons send the following PJLink Class 1 commands, which are supported by Class 2 projectors:
+
+- **ON:** `%1POWR 1` — power on
+- **OFF:** `%1POWR 0` — standby
+- **MUTE:** first queries `%1AVMT ?`, then sends `%1AVMT 31` to enable video/audio mute or `%1AVMT 30` to disable it
+
+PJLink replies and errors are written to the JavaScript console. The MUTE command is sent only after the projector successfully returns its current AV-mute state.
 
 Before testing, edit `udp-config.js`:
 
@@ -57,7 +77,7 @@ Set the computer's LAN address as `host` in `udp-config.js`, deploy the site to 
 3. Add an HTML5 state/widget to the full-screen zone.
 4. Set Site Source to Local Site and select this folder's `index.html`.
 5. Enable **Mouse and Touch Events**. Enable **Display Cursor** when testing with a USB mouse.
-6. For the visual-only simulation, leave BrightSign JavaScript Objects disabled. For UDP control, enable **Node.js** for the HTML widget/presentation, as required by the BrightSign player configuration. The page uses Node's `dgram` API to send and receive packets.
+6. For the visual-only simulation, leave BrightSign JavaScript Objects disabled. For UDP and PJLink control, enable **Node.js** for the HTML widget/presentation, as required by the BrightSign player configuration. The page uses Node's `dgram` API for UDP and the `net`/`crypto` APIs for PJLink TCP and authentication.
 7. Publish using Standalone or Local Network mode.
 
 ## Run without BrightSign Author
@@ -66,10 +86,12 @@ For a simple full-screen test, copy the contents of this folder to the root of a
 
 ## Current limitation
 
-Projector, BD, HDMI, and VGA controls are currently visual controls awaiting their separate protocol integration. Each introduction-video selection button sends its configured UDP command and shows its corresponding numbered playback panel. While a video is marked as playing, leaving and returning to the Introduction tab restores that playback panel. `STOP_VIDEO` from the on-screen button or the incoming `VIDEO_FINISHED` command clears the state. The first **BD** tab tap from another tab opens the playback-control page. When BD is already selected, each normal BD-tab tap toggles between the playback-control and navigation pages. The BD navigation **BACK** button remains on the navigation page.
+BD, HDMI, and VGA controls are currently visual controls awaiting their separate protocol integration. Projector ON, OFF, and MUTE are implemented with PJLink, but remain disabled until the installation values are entered in `projector-config.js`. Each introduction-video selection button sends its configured UDP command and shows its corresponding numbered playback panel. While a video is marked as playing, leaving and returning to the Introduction tab restores that playback panel. `STOP_VIDEO` from the on-screen button or the incoming `VIDEO_FINISHED` command clears the state. The first **BD** tab tap from another tab opens the playback-control page. When BD is already selected, each normal BD-tab tap toggles between the playback-control and navigation pages. The BD navigation **BACK** button remains on the navigation page.
 
 Official references:
 
+- https://docs.connect.panasonic.com/projector/products/rez12/spec/
+- https://pjlink.jbmia.or.jp/english/data/5-1_PJLink_eng_20131210.pdf
 - https://docs.brightsign.biz/user-guides/html5-state
 - https://docs.brightsign.biz/developers/displaying-html-with-brightauthorconnected
 - https://docs.brightsign.biz/developers/displaying-html-without-brightauthor-connected-or-classic
