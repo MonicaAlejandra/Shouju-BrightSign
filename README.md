@@ -45,6 +45,33 @@ Before testing, edit `switcher-config.js`:
 
 The US-41 permits one TCP/IP connection at a time. With TCP, the panel waits briefly and sends `z1[CR]` to confirm the selected input; connection errors, send errors, timeouts, and mismatched readback values are retried up to `maxAttempts`. UDP retries send errors but cannot perform this readback verification. The most recently selected footer input always takes priority: selecting another input cancels any pending retry and active socket for the old input.
 
+## Blu-ray control (Denon Professional DN-500BD MKII)
+
+The BD playback and navigation buttons send ASCII commands through BrightSign serial port `0`. The connection is configured in `bluray-config.js` for `115200` baud, 8 data bits, no parity, 1 stop bit, no flow control. `app.js` adds the required carriage return (`0x0D`) to every command.
+
+| Panel control | Serial frame |
+| --- | --- |
+| 再生 / Play | `@02353[CR]` |
+| 停止 / Stop | `@02354[CR]` |
+| BACK | `@0PCRTN[CR]` |
+| Left | `@0PCCUSR1[CR]` |
+| Right | `@0PCCUSR2[CR]` |
+| Up | `@0PCCUSR3[CR]` |
+| Down | `@0PCCUSR4[CR]` |
+| OK / Enter | `@0PCENTR[CR]` |
+
+The serial port opens on the first BD command and remains open until the page unloads. Commands are queued with at least 30 ms between transmissions. The sender waits up to 500 ms for Denon ACK (`0x06`) or NACK (`0x15`) before allowing the next queued command to continue, so a passive PC capture does not block testing indefinitely. CR-terminated Denon status notifications are logged and acknowledged with `0x06`. These timing and acknowledgement values can be adjusted in `bluray-config.js`. A normal desktop browser has no `BSSerialPort`; it logs that serial is unavailable and does not transmit.
+
+For an XC4055-to-PC output test, connect a real RS-232 adapter—not a TTL UART adapter—and set the PC terminal to `115200 8N1`, with flow control disabled. The BrightSign 3.5 mm port is tip = RX, ring = TX, sleeve = ground, so connect tip to the PC adapter's TX (DE9 pin 3), ring to its RX (DE9 pin 2), and sleeve to ground (DE9 pin 5). Verify the cable pinout with a continuity tester because commercial 3.5 mm serial adapters are not wired consistently.
+
+Run the offline framing self-test from this folder with:
+
+```powershell
+node .\tools\bluray-serial-self-test.js
+```
+
+For a direct command test on a BrightSign player, the console API is `BRIGHTSIGN_PANEL.sendBdCommand("play")`; replace `play` with `stop`, `back`, `left`, `right`, `up`, `down`, or `enter`.
+
 ## Projector control (PJLink)
 
 The Panasonic PT-REZ80 is controlled over PJLink Class 2 using TCP. The panel supports both PJLink authentication modes: no authentication and the standard MD5 challenge-response mode.
@@ -104,7 +131,7 @@ For a simple full-screen test, copy the contents of this folder to the root of a
 
 ## Current limitation
 
-Projector ON, OFF, and MUTE are implemented with PJLink, but remain disabled until the installation values are entered in `projector-config.js`. Each introduction-video selection button sends its configured UDP command and shows its corresponding numbered playback panel. While a video is marked as playing, leaving and returning to the Introduction tab restores that playback panel. `STOP_VIDEO` from the on-screen button or the incoming `VIDEO_FINISHED` command clears the state. The first **BD** tab tap from another tab opens the playback-control page. When BD is already selected, each normal BD-tab tap toggles between the playback-control and navigation pages. The BD navigation **BACK** button remains on the navigation page.
+Projector ON, OFF, and MUTE are implemented with PJLink. Each introduction-video selection button sends its configured UDP command and shows its corresponding numbered playback panel. While a video is marked as playing, leaving and returning to the Introduction tab restores that playback panel. `STOP_VIDEO` from the on-screen button or the incoming `VIDEO_FINISHED` command clears the state. The first **BD** tab tap from another tab opens the playback-control page. When BD is already selected, each normal BD-tab tap toggles between the playback-control and navigation pages. The BD navigation **BACK** button sends the Denon Return command and remains on the navigation page. The target Bluefin BSBI touch panel must be published using the exact internal HS model reported by that unit and its native `1280x800x60` mode; the current test presentation remains targeted to the XC4055.
 
 Official references:
 

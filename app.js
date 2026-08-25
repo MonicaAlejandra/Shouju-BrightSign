@@ -12,6 +12,7 @@
   var udpConfig = window.BRIGHTSIGN_UDP_CONFIG || {};
   var projectorConfig = window.BRIGHTSIGN_PROJECTOR_CONFIG || {};
   var switcherConfig = window.BRIGHTSIGN_SWITCHER_CONFIG || {};
+  var blurayConfig = window.BRIGHTSIGN_BLURAY_CONFIG || {};
 
   var pages = {
     projector: { image: "assets/projector-control-panel.png", alt: "プロジェクター操作" },
@@ -92,6 +93,193 @@
   var switcherRetryTimer = 0;
   var switcherRequestId = 0;
   var switcherActiveSocket = null;
+  var bdSerialPort = null;
+  var bdSerialReceiveBuffer = "";
+  var bdSerialQueue = [];
+  var bdPendingCommand = null;
+  var bdAckTimeoutTimer = 0;
+  var bdQueueTimer = 0;
+  var bdLastCommandTime = 0;
+
+  function closeBdSerialPort() {
+    window.clearTimeout(bdAckTimeoutTimer);
+    window.clearTimeout(bdQueueTimer);
+    bdAckTimeoutTimer = 0;
+    bdQueueTimer = 0;
+    bdPendingCommand = null;
+    bdSerialQueue = [];
+    if (bdSerialPort) {
+      try {
+        bdSerialPort.Close();
+      } catch (error) {
+        console.warn("BD serial port close failed: " + error.message);
+      }
+    }
+    bdSerialPort = null;
+    bdSerialReceiveBuffer = "";
+  }
+
+  function scheduleNextBdCommand() {
+    if (bdPendingCommand || !bdSerialQueue.length || bdQueueTimer) return;
+    var commandIntervalMs = Math.max(30, Number(blurayConfig.commandIntervalMs || 30));
+    var elapsedMs = Date.now() - bdLastCommandTime;
+    var delayMs = Math.max(0, commandIntervalMs - elapsedMs);
+
+    if (delayMs > 0) {
+      bdQueueTimer = window.setTimeout(function () {
+        bdQueueTimer = 0;
+        transmitNextBdCommand();
+      }, delayMs);
+      return;
+    }
+    transmitNextBdCommand();
+  }
+
+  function finishPendingBdCommand(result) {
+    if (!bdPendingCommand) return;
+    window.clearTimeout(bdAckTimeoutTimer);
+    bdAckTimeoutTimer = 0;
+    console.log("BD serial command " + bdPendingCommand.name + ": " + result + ".");
+    bdPendingCommand = null;
+    scheduleNextBdCommand();
+  }
+
+  function handleBdSerialByte(event) {
+    var value = Number(event && event.sbyte);
+    if (!Number.isFinite(value)) return;
+
+    if (value === 0x06) {
+      console.log("DN-500BD MKII serial response: ACK (0x06)");
+      finishPendingBdCommand("acknowledged");
+      return;
+    }
+    if (value === 0x15) {
+      console.error("DN-500BD MKII serial response: NACK (0x15)");
+      finishPendingBdCommand("rejected");
+      return;
+    }
+    if (value === 0x0D) {
+      if (bdSerialReceiveBuffer) {
+        var response = bdSerialReceiveBuffer;
+        bdSerialReceiveBuffer = "";
+        console.log("DN-500BD MKII serial response: " + response + "[CR]");
+        if (blurayConfig.acknowledgeStatus && bdSerialPort && response.indexOf("@0") === 0) {
+          try {
+            bdSerialPort.SendByte(0x06);
+            console.log("DN-500BD MKII status acknowledged with ACK (0x06).");
+          } catch (error) {
+            console.error("DN-500BD MKII status ACK failed: " + error.message);
+          }
+        }
+      }
+      return;
+    }
+    if (value >= 0x20 && value <= 0x7F) {
+      bdSerialReceiveBuffer += String.fromCharCode(value);
+      if (bdSerialReceiveBuffer.length > 600) {
+        console.warn("DN-500BD MKII serial response exceeded 600 bytes; clearing receive buffer.");
+        bdSerialReceiveBuffer = "";
+      }
+      return;
+    }
+
+    console.log("DN-500BD MKII serial response byte: 0x" + value.toString(16).toUpperCase().padStart(2, "0"));
+  }
+
+  function openBdSerialPort() {
+    if (bdSerialPort) return bdSerialPort;
+
+    if (!blurayConfig.enabled) {
+      console.warn("BD serial control is disabled. Enable it in bluray-config.js to send commands.");
+      return null;
+    }
+    if (typeof BSSerialPort !== "function") {
+      console.warn("BD serial command was not sent: BSSerialPort is unavailable outside a BrightSign player.");
+      return null;
+    }
+
+    var port = Number(blurayConfig.port);
+    var baudRate = Number(blurayConfig.baudRate || 115200);
+    var dataBits = Number(blurayConfig.dataBits || 8);
+    var stopBits = Number(blurayConfig.stopBits || 1);
+    var parity = String(blurayConfig.parity || "none").toLowerCase();
+
+    if (!Number.isInteger(port) || port < 0) {
+      console.error("BD serial configuration error: port must be a non-negative integer.");
+      return null;
+    }
+    if (!Number.isInteger(baudRate) || baudRate < 1) {
+      console.error("BD serial configuration error: baudRate must be a positive integer.");
+      return null;
+    }
+
+    try {
+      var serialPort = new BSSerialPort(port);
+      serialPort.SetBaudRate(baudRate);
+      serialPort.SetDataBits(dataBits);
+      serialPort.SetStopBits(stopBits);
+      serialPort.SetParity(parity);
+      serialPort.SetEcho(Boolean(blurayConfig.echo));
+      serialPort.SetFlowControl(Boolean(blurayConfig.flowControl));
+      serialPort.SetGenerateByteEvent(true);
+      serialPort.onserialbyte = handleBdSerialByte;
+      bdSerialPort = serialPort;
+      console.log("BD serial port " + port + " opened at " + baudRate + " baud, " + dataBits + parity.charAt(0).toUpperCase() + stopBits + ".");
+      return bdSerialPort;
+    } catch (error) {
+      closeBdSerialPort();
+      console.error("BD serial port could not be opened: " + error.message);
+      return null;
+    }
+  }
+
+  function sendBdCommand(commandName) {
+    var commands = blurayConfig.commands || {};
+    var configuredCommand = commands[commandName];
+    if (!configuredCommand) {
+      console.error("BD serial configuration error: no command is configured for " + commandName + ".");
+      return false;
+    }
+
+    var command = String(configuredCommand).replace(/[\r\n]+$/g, "");
+    var frame = command + "\r";
+    var serialPort = openBdSerialPort();
+    if (!serialPort) return false;
+
+    bdSerialQueue.push({ name: commandName, frame: frame, display: command + "[CR]" });
+    scheduleNextBdCommand();
+    return true;
+  }
+
+  function transmitNextBdCommand() {
+    if (bdPendingCommand || !bdSerialQueue.length) return;
+    var serialPort = openBdSerialPort();
+    if (!serialPort) {
+      bdSerialQueue = [];
+      return;
+    }
+
+    bdPendingCommand = bdSerialQueue.shift();
+    console.log("BD serial command: " + bdPendingCommand.display);
+    try {
+      if (serialPort.SendBytes(bdPendingCommand.frame) === false) {
+        throw new Error("BSSerialPort rejected the command");
+      }
+      bdLastCommandTime = Date.now();
+      var ackTimeoutMs = Math.max(300, Number(blurayConfig.ackTimeoutMs || 500));
+      bdAckTimeoutTimer = window.setTimeout(function () {
+        bdAckTimeoutTimer = 0;
+        if (!bdPendingCommand) return;
+        console.warn("BD serial command " + bdPendingCommand.name + " timed out without ACK/NACK; continuing.");
+        bdPendingCommand = null;
+        scheduleNextBdCommand();
+      }, ackTimeoutMs);
+    } catch (error) {
+      console.error("BD serial send failed: " + error.message);
+      closeBdSerialPort();
+    }
+  }
+
   function udpCommand(key, fallback) {
     var commands = udpConfig.commands || {};
     return commands[key] || fallback;
@@ -1014,7 +1202,8 @@
       y: 385,
       width: 220,
       height: 124,
-      content: '<span class="label">再生</span><span class="disc-icon"><span class="play-triangle"></span></span>'
+      content: '<span class="label">再生</span><span class="disc-icon"><span class="play-triangle"></span></span>',
+      onClick: function () { sendBdCommand("play"); }
     });
     addButton({
       label: "停止",
@@ -1023,7 +1212,8 @@
       y: 385,
       width: 220,
       height: 124,
-      content: '<span class="label">停止</span><span class="disc-icon"><span class="stop-square"></span></span>'
+      content: '<span class="label">停止</span><span class="disc-icon"><span class="stop-square"></span></span>',
+      onClick: function () { sendBdCommand("stop"); }
     });
   }
 
@@ -1035,12 +1225,12 @@
   }
 
   function addBdNavigationControls() {
-    addButton({ label: "BACK", className: "bd-text-button", x: 68, y: 223, width: 220, height: 100, content: "BACK" });
-    addButton({ label: "上", className: "bd-arrow-button", x: 530, y: 223, width: 220, height: 100, content: bdArrowIcon(0) });
-    addButton({ label: "左", className: "bd-arrow-button", x: 408, y: 347, width: 220, height: 100, content: bdArrowIcon(-90) });
-    addButton({ label: "右", className: "bd-arrow-button", x: 652, y: 347, width: 220, height: 100, content: bdArrowIcon(90) });
-    addButton({ label: "下", className: "bd-arrow-button", x: 530, y: 471, width: 220, height: 100, content: bdArrowIcon(180) });
-    addButton({ label: "OK", className: "bd-text-button", x: 992, y: 471, width: 220, height: 100, content: "OK" });
+    addButton({ label: "BACK", className: "bd-text-button", x: 68, y: 223, width: 220, height: 100, content: "BACK", onClick: function () { sendBdCommand("back"); } });
+    addButton({ label: "上", className: "bd-arrow-button", x: 530, y: 223, width: 220, height: 100, content: bdArrowIcon(0), onClick: function () { sendBdCommand("up"); } });
+    addButton({ label: "左", className: "bd-arrow-button", x: 408, y: 347, width: 220, height: 100, content: bdArrowIcon(-90), onClick: function () { sendBdCommand("left"); } });
+    addButton({ label: "右", className: "bd-arrow-button", x: 652, y: 347, width: 220, height: 100, content: bdArrowIcon(90), onClick: function () { sendBdCommand("right"); } });
+    addButton({ label: "下", className: "bd-arrow-button", x: 530, y: 471, width: 220, height: 100, content: bdArrowIcon(180), onClick: function () { sendBdCommand("down"); } });
+    addButton({ label: "OK", className: "bd-text-button", x: 992, y: 471, width: 220, height: 100, content: "OK", onClick: function () { sendBdCommand("enter"); } });
   }
 
   function removeTransitionOverlays() {
@@ -1131,12 +1321,15 @@
     closeUdpReceiverSocket(udpReceiverSocket);
     udpReceiverSocket = null;
     udpReceiverStarting = false;
+    closeBdSerialPort();
   });
   window.BRIGHTSIGN_PANEL = {
     receiveCommand: handleIncomingUdpCommand,
     videoIsPlaying: function () { return isVideoPlaying; },
     sendProjectorCommand: sendPjLinkCommand,
-    selectSwitcherInput: selectSwitcherInput
+    selectSwitcherInput: selectSwitcherInput,
+    sendBdCommand: sendBdCommand,
+    closeBdSerialPort: closeBdSerialPort
   };
   resizeStage();
   showPage("projector");
