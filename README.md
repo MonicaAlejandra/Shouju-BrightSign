@@ -21,14 +21,29 @@ Action buttons use a continuous multi-stage blend from gray through a pale white
 
 The 24 introduction-selection buttons map in row order to `assets/video-playback-01.png` through `assets/video-playback-24.png`. This includes the six enabled `予備` buttons, mapped to panels 19–24.
 
-## UDP command test
+## Introduction-video UDP command test
 
-UDP is used only by the introduction-video section when the panel runs in a BrightSign HTML widget with **Node.js enabled**:
+The introduction-video section uses UDP when the panel runs in a BrightSign HTML widget with **Node.js enabled**:
 
 - Introduction videos: `PLAY_1` through `PLAY_24`
 - Video playback: `STOP_VIDEO`; incoming `VIDEO_FINISHED` clears the playing state
 
-BD, HDMI, and VGA controls keep their normal button feedback and navigation, but do not send UDP. Projector control uses PJLink separately from the introduction-video UDP functions.
+The footer selects the corresponding US-41 input when configured: PC (HDMI) → IN 1, introduction video → IN 2, BD → IN 3, and PC (VGA) → IN 4. Projector control uses PJLink separately from the introduction-video UDP functions.
+
+## HDMI switcher control (IMAGENICS US-41)
+
+The footer navigation sends the IMAGENICS standard matrix command `IN,OUT` followed by a carriage return. The configured mapping sends `1,1[CR]` for PC (HDMI), `2,1[CR]` for introduction video, `3,1[CR]` for BD, and `4,1[CR]` for PC (VGA).
+
+Before testing, edit `switcher-config.js`:
+
+1. Set `host` to the US-41 LAN IP address.
+2. Confirm `port`. The US-41 factory default is `1300`.
+3. Leave `protocol` as `"tcp"` unless the switcher has been explicitly reconfigured for UDP/IP.
+4. Set `enabled: true`.
+5. Adjust `maxAttempts`, `retryDelayMs`, and the TCP verification options only if the installation needs different timing.
+6. Keep Node.js enabled for the BrightSign HTML widget/presentation. A normal browser cannot open the required TCP or UDP socket.
+
+The US-41 permits one TCP/IP connection at a time. With TCP, the panel waits briefly and sends `z1[CR]` to confirm the selected input; connection errors, send errors, timeouts, and mismatched readback values are retried up to `maxAttempts`. UDP retries send errors but cannot perform this readback verification. The most recently selected footer input always takes priority: selecting another input cancels any pending retry and active socket for the old input.
 
 ## Projector control (PJLink)
 
@@ -89,7 +104,7 @@ For a simple full-screen test, copy the contents of this folder to the root of a
 
 ## Current limitation
 
-BD, HDMI, and VGA controls are currently visual controls awaiting their separate protocol integration. Projector ON, OFF, and MUTE are implemented with PJLink, but remain disabled until the installation values are entered in `projector-config.js`. Each introduction-video selection button sends its configured UDP command and shows its corresponding numbered playback panel. While a video is marked as playing, leaving and returning to the Introduction tab restores that playback panel. `STOP_VIDEO` from the on-screen button or the incoming `VIDEO_FINISHED` command clears the state. The first **BD** tab tap from another tab opens the playback-control page. When BD is already selected, each normal BD-tab tap toggles between the playback-control and navigation pages. The BD navigation **BACK** button remains on the navigation page.
+Projector ON, OFF, and MUTE are implemented with PJLink, but remain disabled until the installation values are entered in `projector-config.js`. Each introduction-video selection button sends its configured UDP command and shows its corresponding numbered playback panel. While a video is marked as playing, leaving and returning to the Introduction tab restores that playback panel. `STOP_VIDEO` from the on-screen button or the incoming `VIDEO_FINISHED` command clears the state. The first **BD** tab tap from another tab opens the playback-control page. When BD is already selected, each normal BD-tab tap toggles between the playback-control and navigation pages. The BD navigation **BACK** button remains on the navigation page.
 
 Official references:
 
@@ -99,3 +114,4 @@ Official references:
 - https://docs.brightsign.biz/developers/displaying-html-with-brightauthorconnected
 - https://docs.brightsign.biz/developers/displaying-html-without-brightauthor-connected-or-classic
 - https://docs.brightsign.biz/developers/creating-html-pages
+- https://imagenics.co.jp/pdf/products/t_us-41_gaibu.20220217.pdf

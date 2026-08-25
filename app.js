@@ -11,6 +11,7 @@
   var UDP_RECEIVER_RETRY_MS = 5000;
   var udpConfig = window.BRIGHTSIGN_UDP_CONFIG || {};
   var projectorConfig = window.BRIGHTSIGN_PROJECTOR_CONFIG || {};
+  var switcherConfig = window.BRIGHTSIGN_SWITCHER_CONFIG || {};
 
   var pages = {
     projector: { image: "assets/projector-control-panel.png", alt: "プロジェクター操作" },
@@ -84,6 +85,11 @@
   var udpReceiverStarting = false;
   var pageTransitionTimer = 0;
   var preloadedPageImages = [];
+  var switcherCommandInFlight = false;
+  var pendingSwitcherInput = null;
+  var switcherRetryTimer = 0;
+  var switcherRequestId = 0;
+  var switcherActiveSocket = null;
   function udpCommand(key, fallback) {
     var commands = udpConfig.commands || {};
     return commands[key] || fallback;
@@ -127,6 +133,242 @@
       console.error("UDP is unavailable: " + error.message);
       return false;
     }
+  }
+
+  function sendSwitcherCommand(command, expectResponse, callback) {
+    if (typeof expectResponse === "function") {
+      callback = expectResponse;
+      expectResponse = false;
+    }
+    var complete = typeof callback === "function" ? callback : function () {};
+    var host = switcherConfig.host;
+    var port = Number(switcherConfig.port || 1300);
+    var timeoutMs = Number(switcherConfig.timeoutMs || 5000);
+    var protocol = String(switcherConfig.protocol || "tcp").toLowerCase();
+    var settled = false;
+    var socket = null;
+
+    function finish(error, response) {
+      if (settled) return;
+      settled = true;
+      if (switcherActiveSocket === socket) switcherActiveSocket = null;
+      if (error) {
+        console.error("US-41 command failed: " + error.message);
+      } else {
+        console.log("US-41 command sent to " + host + ":" + port + " — " + command.replace(/\r$/, "[CR]"));
+      }
+      complete(error, response);
+    }
+
+    if (!switcherConfig.enabled) {
+      finish(new Error("switcher control is disabled in switcher-config.js"));
+      return false;
+    }
+
+    if (!host || !port || port < 1 || port > 65535) {
+      finish(new Error("set a valid switcher host and port in switcher-config.js"));
+      return false;
+    }
+
+    if (!timeoutMs || timeoutMs < 250) {
+      finish(new Error("set switcher timeoutMs to 250 or greater"));
+      return false;
+    }
+
+    if (protocol !== "tcp" && protocol !== "udp") {
+      finish(new Error('switcher protocol must be "tcp" or "udp"'));
+      return false;
+    }
+
+    if (typeof require !== "function") {
+      finish(new Error("this browser has no BrightSign Node.js runtime"));
+      return false;
+    }
+
+    try {
+      if (protocol === "udp") {
+        if (expectResponse) {
+          finish(new Error("US-41 response verification requires TCP/IP"));
+          return false;
+        }
+        var dgram = require("dgram");
+        var udpSocket = dgram.createSocket("udp4");
+        udpSocket.send(Buffer.from(command, "ascii"), port, host, function (error) {
+          udpSocket.close();
+          finish(error || null);
+        });
+        return true;
+      }
+
+      var net = require("net");
+      socket = net.createConnection({ host: host, port: port });
+      switcherActiveSocket = socket;
+      var responseBuffer = "";
+      socket.setTimeout(timeoutMs);
+      socket.setEncoding("ascii");
+      socket.once("connect", function () {
+        console.log("US-41 connected to " + host + ":" + port + ".");
+        if (expectResponse) {
+          socket.write(command, "ascii", function (error) {
+            if (error) finish(error);
+          });
+          return;
+        }
+        socket.end(command, "ascii", function () {
+          // The US-41 accepts one TCP/IP connection at a time. Close this
+          // one before allowing the queued footer selection to connect.
+          socket.destroy();
+          finish(null);
+        });
+      });
+      socket.on("data", function (data) {
+        if (!expectResponse || settled) return;
+        responseBuffer += data;
+        var delimiterIndex = responseBuffer.indexOf("\r");
+        if (delimiterIndex === -1) return;
+        var response = responseBuffer.slice(0, delimiterIndex).replace(/\n/g, "").trim();
+        socket.destroy();
+        finish(null, response);
+      });
+      socket.once("timeout", function () {
+        socket.destroy();
+        finish(new Error("connection timed out"));
+      });
+      socket.once("error", function (error) {
+        socket.destroy();
+        finish(error);
+      });
+      socket.once("close", function () {
+        if (!settled) {
+          finish(new Error(expectResponse ? "connection closed before verification reply" : "connection closed before command completed"));
+        }
+      });
+      return true;
+    } catch (error) {
+      finish(error);
+      return false;
+    }
+  }
+
+  function isCurrentSwitcherRequest(requestId) {
+    return requestId === switcherRequestId;
+  }
+
+  function cancelActiveSwitcherRequest() {
+    window.clearTimeout(switcherRetryTimer);
+    switcherRetryTimer = 0;
+    if (switcherActiveSocket && !switcherActiveSocket.destroyed) {
+      switcherActiveSocket.destroy();
+    }
+    switcherActiveSocket = null;
+    switcherCommandInFlight = false;
+  }
+
+  function retrySwitcherInput(input, output, attempt, reason, requestId, callback) {
+    if (!isCurrentSwitcherRequest(requestId)) return;
+    var configuredAttempts = Number(switcherConfig.maxAttempts);
+    var configuredRetryDelayMs = Number(switcherConfig.retryDelayMs);
+    var maxAttempts = isFinite(configuredAttempts) ? Math.max(1, Math.floor(configuredAttempts)) : 3;
+    var retryDelayMs = isFinite(configuredRetryDelayMs) ? Math.max(0, configuredRetryDelayMs) : 500;
+
+    if (attempt >= maxAttempts) {
+      console.error("US-41 input " + input + " failed after " + attempt + " attempts: " + reason);
+      callback(false);
+      return;
+    }
+
+    console.warn("US-41 input " + input + " " + reason + "; retrying (attempt " + (attempt + 1) + " of " + maxAttempts + ").");
+    switcherRetryTimer = window.setTimeout(function () {
+      switcherRetryTimer = 0;
+      if (!isCurrentSwitcherRequest(requestId)) return;
+      setSwitcherInputWithRetry(input, output, attempt + 1, requestId, callback);
+    }, retryDelayMs);
+  }
+
+  function setSwitcherInputWithRetry(input, output, attempt, requestId, callback) {
+    if (!isCurrentSwitcherRequest(requestId)) return;
+    var protocol = String(switcherConfig.protocol || "tcp").toLowerCase();
+    var verifyEnabled = Boolean(switcherConfig.verifyEnabled) && protocol === "tcp";
+    var configuredVerifyDelayMs = Number(switcherConfig.verifyDelayMs);
+    var verifyDelayMs = isFinite(configuredVerifyDelayMs) ? Math.max(0, configuredVerifyDelayMs) : 250;
+    var command = input + "," + output + "\r";
+
+    sendSwitcherCommand(command, false, function (sendError) {
+      if (!isCurrentSwitcherRequest(requestId)) return;
+      if (sendError) {
+        retrySwitcherInput(input, output, attempt, "send failed (" + sendError.message + ")", requestId, callback);
+        return;
+      }
+
+      if (!verifyEnabled) {
+        callback(true);
+        return;
+      }
+
+      switcherRetryTimer = window.setTimeout(function () {
+        switcherRetryTimer = 0;
+        if (!isCurrentSwitcherRequest(requestId)) return;
+        // The US-41 returns the selected input as three digits for zOUT[CR].
+        sendSwitcherCommand("z" + output + "\r", true, function (verifyError, response) {
+          if (!isCurrentSwitcherRequest(requestId)) return;
+          var selectedInput = /^\d+$/.test(response || "") ? String(Number(response)) : "";
+          if (!verifyError && selectedInput === input) {
+            console.log("US-41 input " + input + " verified on output " + output + ".");
+            callback(true);
+            return;
+          }
+
+          var reason = verifyError
+            ? "verification failed (" + verifyError.message + ")"
+            : "verification returned " + (response || "an empty response");
+          retrySwitcherInput(input, output, attempt, reason, requestId, callback);
+        });
+      }, verifyDelayMs);
+    });
+  }
+
+  function selectSwitcherInput(input) {
+    var output = String(switcherConfig.output || 1);
+    if (!/^[1-9][0-9]*$/.test(String(input)) || !/^[1-9][0-9]*$/.test(output)) {
+      console.error("US-41 input mapping error: input and output must be positive whole numbers.");
+      return;
+    }
+
+    if (!switcherConfig.enabled) {
+      console.warn("US-41 switcher control is disabled in switcher-config.js.");
+      return;
+    }
+
+    switcherRequestId += 1;
+    pendingSwitcherInput = String(input);
+    if (switcherCommandInFlight || switcherRetryTimer || switcherActiveSocket) {
+      cancelActiveSwitcherRequest();
+    }
+
+    function sendNextSwitcherInput() {
+      var inputToSend = pendingSwitcherInput;
+      pendingSwitcherInput = null;
+      if (!inputToSend) {
+        switcherCommandInFlight = false;
+        return;
+      }
+
+      switcherCommandInFlight = true;
+      var requestId = switcherRequestId;
+      setSwitcherInputWithRetry(inputToSend, output, 1, requestId, function () {
+        if (!isCurrentSwitcherRequest(requestId)) return;
+        switcherCommandInFlight = false;
+        sendNextSwitcherInput();
+      });
+    }
+
+    sendNextSwitcherInput();
+  }
+
+  function selectSwitcherInputForSection(section) {
+    var inputBySection = switcherConfig.inputBySection || {};
+    if (!Object.prototype.hasOwnProperty.call(inputBySection, section)) return;
+    selectSwitcherInput(inputBySection[section]);
   }
 
   function sendPjLinkCommand(command, callback) {
@@ -558,8 +800,10 @@
           content: item.label,
           onClick: function () {
             if (item.id === "bd") {
+              selectSwitcherInputForSection(item.id);
               handleBdTabTap();
             } else {
+              selectSwitcherInputForSection(item.id);
               showPage(item.id === "intro" && isVideoPlaying ? "playback" : item.page, false);
             }
           }
@@ -784,6 +1028,8 @@
     stopProjectorPowerPolling();
     window.clearTimeout(udpReceiverRetryTimer);
     udpReceiverRetryTimer = 0;
+    window.clearTimeout(switcherRetryTimer);
+    switcherRetryTimer = 0;
     closeUdpReceiverSocket(udpReceiverSocket);
     udpReceiverSocket = null;
     udpReceiverStarting = false;
@@ -791,7 +1037,8 @@
   window.BRIGHTSIGN_PANEL = {
     receiveCommand: handleIncomingUdpCommand,
     videoIsPlaying: function () { return isVideoPlaying; },
-    sendProjectorCommand: sendPjLinkCommand
+    sendProjectorCommand: sendPjLinkCommand,
+    selectSwitcherInput: selectSwitcherInput
   };
   resizeStage();
   showPage("projector");
