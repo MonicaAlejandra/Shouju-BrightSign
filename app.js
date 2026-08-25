@@ -76,8 +76,10 @@
   var selectedPlaybackLabel = introButtons[0].ja;
   var isVideoPlaying = false;
   var projectorPowerState = "off";
+  var projectorAcceptsMute = false;
   var projectorMuteState = false;
   var projectorPowerQueryInFlight = false;
+  var projectorPowerQueryCallbacks = [];
   var projectorMuteQueryInFlight = false;
   var projectorPowerPollTimer = 0;
   var udpReceiverSocket = null;
@@ -513,12 +515,24 @@
   function applyProjectorPowerResponse(value) {
     if (value === "0" || value === "2") {
       projectorPowerState = "off";
+      projectorAcceptsMute = false;
+      projectorMuteState = false;
     } else if (value === "1" || value === "3") {
       projectorPowerState = "on";
+      projectorAcceptsMute = value === "1";
     } else {
       return;
     }
     updateProjectorPowerButtons();
+    updateProjectorMuteButton();
+  }
+
+  function showProjectorDisconnectedState() {
+    projectorPowerState = "off";
+    projectorAcceptsMute = false;
+    projectorMuteState = false;
+    updateProjectorPowerButtons();
+    updateProjectorMuteButton();
   }
 
   function updateProjectorMuteButton() {
@@ -541,31 +555,45 @@
   }
 
   function refreshProjectorMuteState() {
-    if (!projectorConfig.enabled || !projectorConfig.mutePollingEnabled || projectorMuteQueryInFlight || projectorPowerState !== "on") return;
+    if (!projectorConfig.enabled || !projectorConfig.mutePollingEnabled || projectorMuteQueryInFlight || !projectorAcceptsMute) return;
     projectorMuteQueryInFlight = true;
     sendPjLinkCommand("AVMT ?", function (error, value) {
       projectorMuteQueryInFlight = false;
-      if (!error) applyProjectorMuteResponse(value);
+      if (!error && projectorAcceptsMute) applyProjectorMuteResponse(value);
     });
   }
 
   function refreshProjectorPowerState(callback) {
-    var complete = typeof callback === "function" ? callback : function () {};
-    if (!projectorConfig.enabled || projectorPowerQueryInFlight) return;
+    if (typeof callback === "function") projectorPowerQueryCallbacks.push(callback);
+    if (!projectorConfig.enabled) {
+      var disabledCallbacks = projectorPowerQueryCallbacks.splice(0);
+      for (var disabledIndex = 0; disabledIndex < disabledCallbacks.length; disabledIndex += 1) {
+        disabledCallbacks[disabledIndex](new Error("projector control is disabled"));
+      }
+      return;
+    }
+    if (projectorPowerQueryInFlight) return;
     projectorPowerQueryInFlight = true;
     sendPjLinkCommand("POWR ?", function (error, value) {
       projectorPowerQueryInFlight = false;
-      if (!error) applyProjectorPowerResponse(value);
-      complete(error, value);
+      if (error) {
+        showProjectorDisconnectedState();
+      } else {
+        applyProjectorPowerResponse(value);
+      }
+      var callbacks = projectorPowerQueryCallbacks.splice(0);
+      for (var index = 0; index < callbacks.length; index += 1) {
+        callbacks[index](error, value);
+      }
     });
   }
 
   function refreshProjectorStatus() {
     refreshProjectorPowerState(function (error) {
       if (error) return;
-      if (projectorPowerState === "on" && projectorConfig.mutePollingEnabled) {
+      if (projectorAcceptsMute && projectorConfig.mutePollingEnabled) {
         refreshProjectorMuteState();
-      } else if (projectorPowerState !== "on") {
+      } else if (!projectorAcceptsMute) {
         projectorMuteState = false;
         updateProjectorMuteButton();
       }
@@ -598,33 +626,87 @@
   }
 
   function setProjectorPower(turnOn) {
-    sendPjLinkCommand("POWR " + (turnOn ? "1" : "0"), function (error, value) {
-      if (error || value !== "OK") return;
-      projectorPowerState = turnOn ? "on" : "off";
-      if (!turnOn) projectorMuteState = false;
-      updateProjectorPowerButtons();
-      updateProjectorMuteButton();
+    function sendPowerCommand() {
+      sendPjLinkCommand("POWR " + (turnOn ? "1" : "0"), function (error, value) {
+        if (error || value !== "OK") {
+          showProjectorDisconnectedState();
+          return;
+        }
+        projectorPowerState = turnOn ? "on" : "off";
+        projectorAcceptsMute = false;
+        if (!turnOn) projectorMuteState = false;
+        updateProjectorPowerButtons();
+        updateProjectorMuteButton();
+        if (turnOn) refreshProjectorStatus();
+      });
+    }
+
+    if (turnOn) {
+      sendPowerCommand();
+      return;
+    }
+
+    refreshProjectorPowerState(function (powerQueryError) {
+      if (powerQueryError || !projectorAcceptsMute) {
+        sendPowerCommand();
+        return;
+      }
+
+      sendPjLinkCommand("AVMT 30", function (muteError, value) {
+        if (!muteError && value === "OK") {
+          projectorMuteState = false;
+          updateProjectorMuteButton();
+        }
+        sendPowerCommand();
+      });
     });
   }
 
   function toggleProjectorMute() {
-    if (!projectorConfig.mutePollingEnabled) {
-      sendPjLinkCommand("AVMT ?", function (queryError, currentValue) {
-        if (queryError) return;
-        var muteIsActive = currentValue === "11" || currentValue === "21" || currentValue === "31";
-        sendPjLinkCommand("AVMT " + (muteIsActive ? "30" : "31"));
-      });
-      return;
+    var showPersistentState = Boolean(projectorConfig.mutePollingEnabled);
+    var previousMuteState = projectorMuteState;
+
+    if (showPersistentState) {
+      projectorMuteState = !previousMuteState;
+      updateProjectorMuteButton();
     }
 
-    sendPjLinkCommand("AVMT ?", function (queryError, currentValue) {
-      if (queryError) return;
-      var muteIsActive = currentValue === "11" || currentValue === "21" || currentValue === "31";
-      applyProjectorMuteResponse(currentValue);
-      sendPjLinkCommand("AVMT " + (muteIsActive ? "30" : "31"), function (setError, value) {
-        if (setError || value !== "OK") return;
-        projectorMuteState = !muteIsActive;
+    refreshProjectorPowerState(function (powerError) {
+      if (powerError || !projectorAcceptsMute) {
+        projectorMuteState = false;
         updateProjectorMuteButton();
+        return;
+      }
+
+      sendPjLinkCommand("AVMT ?", function (queryError, currentValue) {
+        if (queryError || !projectorAcceptsMute) {
+          if (showPersistentState && projectorAcceptsMute) {
+            projectorMuteState = previousMuteState;
+            updateProjectorMuteButton();
+          }
+          return;
+        }
+        var muteIsActive = currentValue === "11" || currentValue === "21" || currentValue === "31";
+        var requestedMuteState = !muteIsActive;
+
+        if (showPersistentState && projectorMuteState !== requestedMuteState) {
+          projectorMuteState = requestedMuteState;
+          updateProjectorMuteButton();
+        }
+
+        sendPjLinkCommand("AVMT " + (requestedMuteState ? "31" : "30"), function (setError, value) {
+          if (setError || value !== "OK" || !projectorAcceptsMute) {
+            if (showPersistentState) {
+              projectorMuteState = projectorAcceptsMute ? muteIsActive : false;
+              updateProjectorMuteButton();
+            }
+            return;
+          }
+          if (showPersistentState) {
+            projectorMuteState = requestedMuteState;
+            updateProjectorMuteButton();
+          }
+        });
       });
     });
   }
@@ -751,20 +833,34 @@
 
     if (!button.disabled && button.className.indexOf("nav-button") === -1) {
       button.addEventListener("pointerdown", function () {
-        if (!feedbackActive) button.classList.add("pressed");
+        if (!feedbackActive) {
+          if (options.reverseWhenActive && button.classList.contains("is-active")) {
+            button.classList.add("deactivating");
+          }
+          button.classList.add("pressed");
+        }
       });
 
       button.addEventListener("pointercancel", function () {
-        if (!feedbackActive) button.classList.remove("pressed");
+        if (!feedbackActive) {
+          button.classList.remove("pressed");
+          button.classList.remove("deactivating");
+        }
       });
 
       button.addEventListener("pointerleave", function (event) {
-        if (!feedbackActive && event.buttons) button.classList.remove("pressed");
+        if (!feedbackActive && event.buttons) {
+          button.classList.remove("pressed");
+          button.classList.remove("deactivating");
+        }
       });
 
       button.addEventListener("click", function () {
         if (feedbackActive) return;
         feedbackActive = true;
+        if (options.reverseWhenActive && button.classList.contains("is-active")) {
+          button.classList.add("deactivating");
+        }
         button.classList.add("pressed");
         window.clearTimeout(actionTimer);
         window.clearTimeout(feedbackTimer);
@@ -776,6 +872,7 @@
         feedbackTimer = window.setTimeout(function () {
           if (button.isConnected) {
             button.classList.remove("pressed");
+            button.classList.remove("deactivating");
             feedbackActive = false;
           }
         }, BUTTON_FEEDBACK_MS);
@@ -853,6 +950,7 @@
       width: 220,
       height: 100,
       content: "MUTE",
+      reverseWhenActive: true,
       onClick: toggleProjectorMute
     });
     updateProjectorPowerButtons();

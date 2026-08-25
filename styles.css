@@ -234,6 +234,11 @@ button {
   animation-name: intro-button-color-crossfade;
 }
 
+.ui-button:not(.nav-button).pressed.deactivating:not(:disabled) {
+  background: var(--button-gray);
+  animation-name: button-color-crossfade-off;
+}
+
 .page-transition-overlay {
   position: absolute;
   inset: 0;
@@ -315,6 +320,40 @@ button {
 
   100% {
     background-color: var(--power-red);
+  }
+}
+
+@keyframes button-color-crossfade-off {
+  0% {
+    background-color: var(--power-red);
+  }
+
+  10% {
+    background-color: #df5f57;
+  }
+
+  24% {
+    background-color: #eb9a94;
+  }
+
+  38% {
+    background-color: #f0d9d7;
+  }
+
+  50% {
+    background-color: #eeeeee;
+  }
+
+  64% {
+    background-color: #b6b7b6;
+  }
+
+  82% {
+    background-color: #818382;
+  }
+
+  100% {
+    background-color: var(--button-gray);
   }
 }
 
