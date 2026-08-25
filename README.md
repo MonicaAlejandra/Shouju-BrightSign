@@ -40,7 +40,10 @@ Before testing, edit `projector-config.js`:
 2. Leave `port` at the PJLink default, `4352`, unless the installation settings require another port.
 3. Set `password` to the password configured for PJLink on the projector. Leave it empty only when the projector has no PJLink password.
 4. Set `enabled: true` after confirming the address and password.
-5. Keep Node.js enabled for the BrightSign HTML widget/presentation. A normal Chrome/Edge browser cannot open the required TCP socket.
+5. Set `pollingEnabled: true` to detect power changes made with the projector remote, or `false` to disable automatic status checks.
+6. Set `mutePollingEnabled: true` to synchronize MUTE with the projector's real AV-mute state. Set it to `false` to make MUTE a momentary button that shows only its normal press animation.
+7. Set `pollIntervalMs` to the desired interval in milliseconds. The default is `5000` (five seconds), and the minimum accepted value is `1000`.
+8. Keep Node.js enabled for the BrightSign HTML widget/presentation. A normal Chrome/Edge browser cannot open the required TCP socket.
 
 The buttons send the following PJLink Class 1 commands, which are supported by Class 2 projectors:
 
@@ -48,7 +51,7 @@ The buttons send the following PJLink Class 1 commands, which are supported by C
 - **OFF:** `%1POWR 0` — standby
 - **MUTE:** first queries `%1AVMT ?`, then sends `%1AVMT 31` to enable video/audio mute or `%1AVMT 30` to disable it
 
-PJLink replies and errors are written to the JavaScript console. The MUTE command is sent only after the projector successfully returns its current AV-mute state.
+ON and OFF form a mutually exclusive status pair. OFF is selected in red when the panel starts. The panel queries `%1POWR ?` when the projector page opens and, when polling is enabled, repeats the query at the configured interval while that page remains visible. It displays ON in red for the on/warming states and OFF in red for the standby/cooling states, including power changes made with the projector remote. When `mutePollingEnabled` is true and the projector is on, each polling cycle also queries `%1AVMT ?`; MUTE remains red while video/audio mute is active and clears when mute is released from the panel or projector remote. When `mutePollingEnabled` is false, pressing MUTE performs a one-time `%1AVMT ?` query and sends the opposite mute command, but the button shows only its normal press animation and never remains red. Polling stops when another panel page is selected. After a successful panel command, the corresponding enabled status button updates immediately. PJLink replies and errors are written to the JavaScript console.
 
 Before testing, edit `udp-config.js`:
 

@@ -6,9 +6,12 @@
  * enabled to true. PJLink uses TCP port 4352 by default.
  */
 window.BRIGHTSIGN_PROJECTOR_CONFIG = {
-  enabled: false,
+  enabled: true,
   host: "192.180.10.109",
-  port: 4352,
+  port: 10000,
   password: "",
-  timeoutMs: 5000
+  timeoutMs: 5000,
+  pollingEnabled: true,
+  mutePollingEnabled: true,
+  pollIntervalMs: 5000
 };

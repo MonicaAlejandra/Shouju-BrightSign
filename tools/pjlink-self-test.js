@@ -27,7 +27,7 @@ var buttons = elementStub();
 global.window = {
   BRIGHTSIGN_UDP_CONFIG: {},
   BRIGHTSIGN_PROJECTOR_CONFIG: {
-    enabled: true,
+    enabled: false,
     host: "127.0.0.1",
     port: 4352,
     password: "",
@@ -51,6 +51,7 @@ global.document = {
 global.Image = function () {};
 
 eval(fs.readFileSync(require("path").join(__dirname, "..", "app.js"), "utf8"));
+window.BRIGHTSIGN_PROJECTOR_CONFIG.enabled = true;
 
 function runExchange(options) {
   return new Promise(function (resolve, reject) {
