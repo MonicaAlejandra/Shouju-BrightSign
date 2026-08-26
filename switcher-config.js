@@ -1,11 +1,9 @@
-/*
- * IMAGENICS US-41 switcher connection settings.
- *
- * The US-41 factory network settings are TCP on port 1300. Set host to the
- * address assigned to the switcher, then set enabled to true. If the US-41
- * has deliberately been reconfigured for UDP/IP, change protocol to "udp".
- * The unit accepts only one TCP/IP connection at a time.
- */
+// IMAGENICS US-41 switcher connection settings.
+//
+// The US-41 factory network settings are TCP on port 1300. Set host to the
+// address assigned to the switcher, then set enabled to true. If the US-41
+// has deliberately been reconfigured for UDP/IP, change protocol to "udp".
+// The unit accepts only one TCP/IP connection at a time.
 window.BRIGHTSIGN_SWITCHER_CONFIG = {
   enabled: true,
   host: "192.180.10.113",

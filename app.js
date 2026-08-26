@@ -126,7 +126,7 @@
     var elapsedMs = Date.now() - bdLastCommandTime;
     var delayMs = Math.max(0, commandIntervalMs - elapsedMs);
 
-    if (delayMs > 0) {
+    if (0 < delayMs) {
       bdQueueTimer = window.setTimeout(function () {
         bdQueueTimer = 0;
         transmitNextBdCommand();
@@ -175,9 +175,9 @@
       }
       return;
     }
-    if (value >= 0x20 && value <= 0x7F) {
+    if (0x20 <= value && value <= 0x7F) {
       bdSerialReceiveBuffer += String.fromCharCode(value);
-      if (bdSerialReceiveBuffer.length > 600) {
+      if (600 < bdSerialReceiveBuffer.length) {
         console.warn("DN-500BD MKII serial response exceeded 600 bytes; clearing receive buffer.");
         bdSerialReceiveBuffer = "";
       }
@@ -295,7 +295,7 @@
       return false;
     }
 
-    if (!host || !port || port < 1 || port > 65535) {
+    if (!host || !port || port < 1 || 65535 < port) {
       console.error("UDP configuration error: set a valid host and port.");
       return false;
     }
@@ -356,7 +356,7 @@
       return false;
     }
 
-    if (!host || !port || port < 1 || port > 65535) {
+    if (!host || !port || port < 1 || 65535 < port) {
       finish(new Error("set a valid switcher host and port in switcher-config.js"));
       return false;
     }
@@ -462,7 +462,7 @@
     var maxAttempts = isFinite(configuredAttempts) ? Math.max(1, Math.floor(configuredAttempts)) : 3;
     var retryDelayMs = isFinite(configuredRetryDelayMs) ? Math.max(0, configuredRetryDelayMs) : 500;
 
-    if (attempt >= maxAttempts) {
+    if (maxAttempts <= attempt) {
       console.error("US-41 input " + input + " failed after " + attempt + " attempts: " + reason);
       callback(false);
       return;
@@ -590,7 +590,7 @@
       return false;
     }
 
-    if (!host || !port || port < 1 || port > 65535) {
+    if (!host || !port || port < 1 || 65535 < port) {
       finish(new Error("set a valid projector host and port in projector-config.js"));
       return false;
     }
@@ -975,7 +975,7 @@
 
     if (!udpConfig.receiveEnabled || typeof require !== "function") return;
     if (udpReceiverSocket || udpReceiverStarting) return;
-    if (!receivePort || receivePort < 1 || receivePort > 65535) {
+    if (!receivePort || receivePort < 1 || 65535 < receivePort) {
       console.error("UDP receive configuration error: set a valid receivePort.");
       return;
     }
@@ -1192,7 +1192,7 @@
         var row = Math.floor(itemIndex / 4);
         addButton({
           label: item.ja,
-          className: "intro-button" + (item.spare ? " spare-button" : itemIndex >= 16 ? " category-button" : ""),
+          className: "intro-button" + (item.spare ? " spare-button" : 16 <= itemIndex ? " category-button" : ""),
           x: columns[column],
           y: rows[row],
           width: widths[column],
