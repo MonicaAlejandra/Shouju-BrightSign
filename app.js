@@ -83,6 +83,7 @@
   var projectorPowerQueryCallbacks = [];
   var projectorMuteQueryInFlight = false;
   var projectorPowerPollTimer = 0;
+  var projectorPowerOnPending = false;
   var udpReceiverSocket = null;
   var udpReceiverRetryTimer = 0;
   var udpReceiverStarting = false;
@@ -700,14 +701,32 @@
     }
   }
 
+  function clearProjectorPowerOnPending() {
+    projectorPowerOnPending = false;
+  }
+
   function applyProjectorPowerResponse(value) {
-    if (value === "0" || value === "2") {
+    if (value === "0") {
+      clearProjectorPowerOnPending();
+      projectorPowerState = "off";
+      projectorAcceptsMute = false;
+      projectorMuteState = false;
+    } else if (value === "2") {
+      if (projectorPowerOnPending) {
+        projectorPowerState = "on";
+        projectorAcceptsMute = false;
+        projectorMuteState = false;
+        updateProjectorPowerButtons();
+        updateProjectorMuteButton();
+        return;
+      }
       projectorPowerState = "off";
       projectorAcceptsMute = false;
       projectorMuteState = false;
     } else if (value === "1" || value === "3") {
       projectorPowerState = "on";
       projectorAcceptsMute = value === "1";
+      if (value === "1") clearProjectorPowerOnPending();
     } else {
       return;
     }
@@ -716,6 +735,14 @@
   }
 
   function showProjectorDisconnectedState() {
+    if (projectorPowerOnPending) {
+      projectorPowerState = "on";
+      projectorAcceptsMute = false;
+      projectorMuteState = false;
+      updateProjectorPowerButtons();
+      updateProjectorMuteButton();
+      return;
+    }
     projectorPowerState = "off";
     projectorAcceptsMute = false;
     projectorMuteState = false;
@@ -830,10 +857,17 @@
     }
 
     if (turnOn) {
+      projectorPowerOnPending = true;
+      projectorPowerState = "on";
+      projectorAcceptsMute = false;
+      projectorMuteState = false;
+      updateProjectorPowerButtons();
+      updateProjectorMuteButton();
       sendPowerCommand();
       return;
     }
 
+    clearProjectorPowerOnPending();
     refreshProjectorPowerState(function (powerQueryError) {
       if (powerQueryError || !projectorAcceptsMute) {
         sendPowerCommand();
@@ -1084,11 +1118,12 @@
           height: 120,
           content: item.label,
           onClick: function () {
+            var isNewSection = activeNavigation[currentPage] !== item.id;
             if (item.id === "bd") {
-              selectSwitcherInputForSection(item.id);
+              if (isNewSection) selectSwitcherInputForSection(item.id);
               handleBdTabTap();
             } else {
-              selectSwitcherInputForSection(item.id);
+              if (isNewSection) selectSwitcherInputForSection(item.id);
               showPage(item.id === "intro" && isVideoPlaying ? "playback" : item.page, false);
             }
           }
@@ -1314,6 +1349,7 @@
   window.addEventListener("orientationchange", resizeStage);
   window.addEventListener("beforeunload", function () {
     stopProjectorPowerPolling();
+    clearProjectorPowerOnPending();
     window.clearTimeout(udpReceiverRetryTimer);
     udpReceiverRetryTimer = 0;
     window.clearTimeout(switcherRetryTimer);

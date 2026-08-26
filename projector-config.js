@@ -7,7 +7,7 @@
  */
 window.BRIGHTSIGN_PROJECTOR_CONFIG = {
   enabled: true,
-  host: "192.180.10.109",
+  host: "192.180.10.114",
   port: 10000,
   password: "",
   timeoutMs: 5000,
