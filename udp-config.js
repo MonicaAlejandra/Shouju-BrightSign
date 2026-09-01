@@ -1,12 +1,12 @@
 // UDP destination and command map.
-// Set enabled to true only after setting host and port to a receiver that is
+// Set enabled to true only after setting ipAddress and port to a receiver that is
 // safe to test. Commands are UTF-8 text packets with no line ending.
 window.BRIGHTSIGN_UDP_CONFIG = {
   enabled: true,
-  host: "192.180.10.111",
+  ipAddress: "192.180.10.111",
   port: 5001,
   receiveEnabled: true,
-  receiveHost: "0.0.0.0",
+  receiveIpAddress: "0.0.0.0",
   receivePort: 5000,
   commands: {
     videoPrefix: "BS_PLAY",

@@ -28,7 +28,7 @@ global.window = {
   BRIGHTSIGN_UDP_CONFIG: {},
   BRIGHTSIGN_PROJECTOR_CONFIG: {
     enabled: false,
-    host: "127.0.0.1",
+    ipAddress: "127.0.0.1",
     port: 4352,
     password: "",
     timeoutMs: 2000

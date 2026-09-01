@@ -11,6 +11,7 @@ Open `index.html` in Chrome or Edge. The 1280×800 panel scales to fit the brows
 - Replace PNG files in `assets` to change the visible page designs.
 - Edit button text, coordinates, and page flow in `app.js`.
 - Edit button styling and stage scaling in `styles.css`.
+- See `COMMAND_PROTOCOL_MEMO.md` for the current device addresses, command frames, and official protocol references.
 - Reload `index.html` after saving.
 
 Keep `index.html`, `styles.css`, `app.js`, and the `assets` folder together. Do not add web-hosted fonts or scripts if the player must remain offline.
@@ -36,7 +37,7 @@ The footer navigation sends the IMAGENICS standard matrix command `IN,OUT` follo
 
 Before testing, edit `switcher-config.js`:
 
-1. Set `host` to the US-41 LAN IP address.
+1. Set `ipAddress` to the US-41 LAN IP address.
 2. Confirm `port`. The US-41 factory default is `1300`.
 3. Leave `protocol` as `"tcp"` unless the switcher has been explicitly reconfigured for UDP/IP.
 4. Set `enabled: true`.
@@ -47,20 +48,22 @@ The US-41 permits one TCP/IP connection at a time. With TCP, the panel waits bri
 
 ## Blu-ray control (Denon Professional DN-500BD MKII)
 
-The BD playback and navigation buttons send ASCII commands through BrightSign serial port `0`. The connection is configured in `bluray-config.js` for `115200` baud, 8 data bits, no parity, 1 stop bit, no flow control. `app.js` adds the required carriage return (`0x0D`) to every command.
+The BD playback and navigation buttons use the transport selected by `transport` in `bluray-config.js`. The current value is `"udp"`: the panel sends the `BD_*` event below to the same `ipAddress` and `port` used by the introduction-video controls in `udp-config.js`. UDP payloads are UTF-8 text with no line ending.
 
-| Panel control | Serial frame |
-| --- | --- |
-| 再生 / Play | `@02353[CR]` |
-| 停止 / Stop | `@02354[CR]` |
-| BACK | `@0PCRTN[CR]` |
-| Left | `@0PCCUSR1[CR]` |
-| Right | `@0PCCUSR2[CR]` |
-| Up | `@0PCCUSR3[CR]` |
-| Down | `@0PCCUSR4[CR]` |
-| OK / Enter | `@0PCENTR[CR]` |
+| Panel control | UDP event | Receiver serial frame |
+| --- | --- | --- |
+| 再生 / Play | `BD_PLAY` | `@02353[CR]` |
+| 停止 / Stop | `BD_STOP` | `@02354[CR]` |
+| BACK | `BD_BACK` | `@0PCRTN[CR]` |
+| Left | `BD_LEFT` | `@0PCCUSR1[CR]` |
+| Right | `BD_RIGHT` | `@0PCCUSR2[CR]` |
+| Up | `BD_UP` | `@0PCCUSR3[CR]` |
+| Down | `BD_DOWN` | `@0PCCUSR4[CR]` |
+| OK / Enter | `BD_ENTER` | `@0PCENTR[CR]` |
 
-The serial port opens on the first BD command and remains open until the page unloads. Commands are queued with at least 30 ms between transmissions. The sender waits up to 500 ms for Denon ACK (`0x06`) or NACK (`0x15`) before allowing the next queued command to continue, so a passive PC capture does not block testing indefinitely. CR-terminated Denon status notifications are logged and acknowledged with `0x06`. These timing and acknowledgement values can be adjusted in `bluray-config.js`. A normal desktop browser has no `BSSerialPort`; it logs that serial is unavailable and does not transmit.
+On the receiving BrightSign presentation, create UDP input events for the eight `BD_*` names and make each event send the corresponding serial frame in the last column. Configure that player's serial output for `115200` baud, 8 data bits, no parity, 1 stop bit, and no flow control. The carriage return belongs on the receiver's serial output; do not add it to the UDP event.
+
+To restore direct serial control from this panel later, change only `transport: "udp"` to `transport: "serial"` in `bluray-config.js`. The original Denon serial command map and queue remain in place. In direct mode, serial port `0` opens on the first BD command and remains open until the page unloads. Commands are queued with at least 30 ms between transmissions. The sender waits up to 500 ms for Denon ACK (`0x06`) or NACK (`0x15`) before allowing the next queued command to continue. CR-terminated Denon status notifications are logged and acknowledged with `0x06`.
 
 For an XC4055-to-PC output test, connect a real RS-232 adapter—not a TTL UART adapter—and set the PC terminal to `115200 8N1`, with flow control disabled. The BrightSign 3.5 mm port is tip = RX, ring = TX, sleeve = ground, so connect tip to the PC adapter's TX (DE9 pin 3), ring to its RX (DE9 pin 2), and sleeve to ground (DE9 pin 5). Verify the cable pinout with a continuity tester because commercial 3.5 mm serial adapters are not wired consistently.
 
@@ -68,6 +71,7 @@ Run the offline framing self-test from this folder with:
 
 ```powershell
 node .\tools\bluray-serial-self-test.js
+node .\tools\bluray-udp-self-test.js
 ```
 
 For a direct command test on a BrightSign player, the console API is `BRIGHTSIGN_PANEL.sendBdCommand("play")`; replace `play` with `stop`, `back`, `left`, `right`, `up`, `down`, or `enter`.
@@ -78,14 +82,15 @@ The Panasonic PT-REZ80 is controlled over PJLink Class 2 using TCP. The panel su
 
 Before testing, edit `projector-config.js`:
 
-1. Set `host` to the projector's IP address.
+1. Set `ipAddress` to the projector's IP address.
 2. Leave `port` at the PJLink default, `4352`, unless the installation settings require another port.
 3. Set `password` to the password configured for PJLink on the projector. Leave it empty only when the projector has no PJLink password.
 4. Set `enabled: true` after confirming the address and password.
 5. Set `pollingEnabled: true` to detect power changes made with the projector remote, or `false` to disable automatic status checks.
 6. Set `mutePollingEnabled: true` to synchronize MUTE with the projector's real AV-mute state. Set it to `false` to make MUTE a momentary button that shows only its normal press animation.
 7. Set `pollIntervalMs` to the desired interval in milliseconds. The default is `5000` (five seconds), and the minimum accepted value is `1000`.
-8. Keep Node.js enabled for the BrightSign HTML widget/presentation. A normal Chrome/Edge browser cannot open the required TCP socket.
+8. Set `powerOnResponseTimeoutMs` to the maximum time allowed for startup status to progress after ON. The default is `15000` (15 seconds), and the minimum accepted value is `1000`.
+9. Keep Node.js enabled for the BrightSign HTML widget/presentation. A normal Chrome/Edge browser cannot open the required TCP socket.
 
 The buttons send the following PJLink Class 1 commands, which are supported by Class 2 projectors:
 
@@ -93,11 +98,13 @@ The buttons send the following PJLink Class 1 commands, which are supported by C
 - **OFF:** when fully on, sends `%1AVMT 30` to clear retained mute before `%1POWR 0` places the projector in standby
 - **MUTE:** first verifies `%1POWR ?`, then—only when the projector reports fully on—queries `%1AVMT ?` and sends `%1AVMT 31` to enable video/audio mute or `%1AVMT 30` to disable it
 
-ON and OFF form a mutually exclusive status pair. OFF is selected in red when the panel starts. After ON is pressed, ON remains selected while startup is pending without using a timer. Warming (`3`), cooling (`2`), and communication gaps do not turn it gray during this pending state. Only a valid fully-off response (`%1POWR=0`) selects OFF; a valid fully-on response (`%1POWR=1`) confirms startup and returns the panel to normal connection-loss handling. The panel queries `%1POWR ?` when the projector page opens and, when polling is enabled, repeats the query at the configured interval while that page remains visible. Before sending standby while the projector is fully on, the panel sends `%1AVMT 30` to clear mute so it is not retained across the power cycle. After ON, polling waits for the fully-on state and then reads `%1AVMT ?` immediately. MUTE commands and status queries are permitted only when `%1POWR ?` reports fully on (`1`), not during standby (`0`), cooling (`2`), or warming (`3`). Whenever fully-off or cooling is detected outside a pending ON request, the MUTE indicator is cleared. When `mutePollingEnabled` is true, activating MUTE uses the normal gray-to-red animation and deactivating it uses a dedicated red-to-gray reverse animation. The indicator changes without waiting for the complete PJLink exchange, remains red while video/audio mute is active, clears when mute is released, and reverts to the projector's confirmed state if a query or command fails. When `mutePollingEnabled` is false, pressing MUTE performs a one-time power and mute query and sends the opposite mute command, but the button shows only its normal press animation and never remains red. Polling stops when another panel page is selected. PJLink replies and errors are written to the JavaScript console.
+While OFF is disabled during startup, it uses a pale gray background and muted gray text, without an outline or extra visible text. Its normal color returns when the waiting period ends.
+
+ON and OFF form a mutually exclusive status pair. OFF is selected in red when the panel starts. After ON is pressed, ON remains selected while startup is pending. During this pending period, OFF is disabled: taps have no press animation and send no commands. OFF becomes usable again when fully ON is confirmed or the startup timeout expires. The ON command does not start a separate immediate status query; the existing periodic poll performs the next `%1POWR ?` query. A fully-off reply (`%1POWR=0`) received while startup is pending does not clear ON or restart its timeout. Warming (`3`) and cooling (`2`) responses keep ON selected and restart the response watchdog. A fully-on response (`%1POWR=1`) confirms startup and stops the watchdog. If startup does not progress before `powerOnResponseTimeoutMs`, the panel selects OFF so a disconnected projector cannot leave ON selected indefinitely. Outside a pending startup, a fully-off response selects OFF normally. The panel continues querying `%1POWR ?` at the configured interval while the projector page remains visible. Before sending standby while the projector is fully on, the panel sends `%1AVMT 30` to clear mute so it is not retained across the power cycle. After fully on is confirmed, it reads `%1AVMT ?` immediately. MUTE commands and status queries are permitted only when `%1POWR ?` reports fully on (`1`), not during standby (`0`), cooling (`2`), or warming (`3`). Whenever fully-off or cooling is detected outside a pending ON request, the MUTE indicator is cleared. When `mutePollingEnabled` is true, activating MUTE uses the normal gray-to-red animation and deactivating it uses a dedicated red-to-gray reverse animation. The indicator changes without waiting for the complete PJLink exchange, remains red while video/audio mute is active, clears when mute is released, and reverts to the projector's confirmed state if a query or command fails. When `mutePollingEnabled` is false, pressing MUTE performs a one-time power and mute query and sends the opposite mute command, but the button shows only its normal press animation and never remains red. Polling stops when another panel page is selected. PJLink replies and errors are written to the JavaScript console.
 
 Before testing, edit `udp-config.js`:
 
-1. Set `host` to the IP address of the UDP receiver.
+1. Set `ipAddress` to the IP address of the UDP receiver.
 2. Set `port` to the receiver's UDP port.
 3. Send the video-finished command to the BrightSign on UDP port `5001`. BrightAuthor continues to use port `5000`.
 4. Replace the command strings, including `videoFinished`, with the exact commands required by the target device or controller.
@@ -113,7 +120,7 @@ To confirm packets on a Windows computer, run the included listener in PowerShel
 .\tools\Receive-Udp.ps1 -Port 5000
 ```
 
-Set the computer's LAN address as `host` in `udp-config.js`, deploy the site to the BrightSign player, and press a mapped control. Allow inbound UDP on the selected port in Windows Firewall if prompted.
+Set the computer's LAN address as `ipAddress` in `udp-config.js`, deploy the site to the BrightSign player, and press a mapped control. Allow inbound UDP on the selected port in Windows Firewall if prompted.
 
 ## Use in BrightSign Author / BrightAuthor:connected
 
@@ -131,7 +138,7 @@ For a simple full-screen test, copy the contents of this folder to the root of a
 
 ## Current limitation
 
-Projector ON, OFF, and MUTE are implemented with PJLink. Each introduction-video selection button sends its configured UDP command and shows its corresponding numbered playback panel. While a video is marked as playing, leaving and returning to the Introduction tab restores that playback panel. `STOP_VIDEO` from the on-screen button or the incoming `VIDEO_FINISHED` command clears the state. The first **BD** tab tap from another tab opens the playback-control page. When BD is already selected, each normal BD-tab tap toggles between the playback-control and navigation pages. The BD navigation **BACK** button sends the Denon Return command and remains on the navigation page. The target Bluefin BSBI touch panel must be published using the exact internal HS model reported by that unit and its native `1280x800x60` mode; the current test presentation remains targeted to the XC4055.
+Projector ON, OFF, and MUTE are implemented with PJLink. Each introduction-video selection button sends its configured UDP command and shows its corresponding numbered playback panel. While a video is marked as playing, leaving and returning to the Introduction tab restores that playback panel. `STOP_VIDEO` from the on-screen button or the incoming `VIDEO_FINISHED` command clears the state. The first **BD** tab tap from another tab opens the playback-control page. When BD is already selected, each normal BD-tab tap toggles between the playback-control and navigation pages. The BD buttons currently send `BD_*` UDP events to the introduction-video destination; the receiving presentation must provide the UDP-to-serial mapping. The BD navigation **BACK** button remains on the navigation page. The target Bluefin BSBI touch panel must be published using the exact internal HS model reported by that unit and its native `1280x800x60` mode; the current test presentation remains targeted to the XC4055.
 
 Official references:
 

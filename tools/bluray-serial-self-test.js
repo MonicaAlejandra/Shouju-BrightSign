@@ -76,6 +76,7 @@ global.Image = function () {};
 
 var root = path.join(__dirname, "..");
 eval(fs.readFileSync(path.join(root, "bluray-config.js"), "utf8"));
+window.BRIGHTSIGN_BLURAY_CONFIG.transport = "serial";
 eval(fs.readFileSync(path.join(root, "app.js"), "utf8"));
 
 var expectedFrames = {

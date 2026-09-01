@@ -84,6 +84,7 @@
   var projectorMuteQueryInFlight = false;
   var projectorPowerPollTimer = 0;
   var projectorPowerOnPending = false;
+  var projectorPowerResponseTimeoutTimer = 0;
   var udpReceiverSocket = null;
   var udpReceiverRetryTimer = 0;
   var udpReceiverStarting = false;
@@ -234,7 +235,7 @@
     }
   }
 
-  function sendBdCommand(commandName) {
+  function sendBdSerialCommand(commandName) {
     var commands = blurayConfig.commands || {};
     var configuredCommand = commands[commandName];
     if (!configuredCommand) {
@@ -250,6 +251,37 @@
     bdSerialQueue.push({ name: commandName, frame: frame, display: command + "[CR]" });
     scheduleNextBdCommand();
     return true;
+  }
+
+  function sendBdUdpCommand(commandName) {
+    var commands = blurayConfig.udpCommands || {};
+    var configuredCommand = commands[commandName];
+    if (!configuredCommand) {
+      console.error("BD UDP configuration error: no command is configured for " + commandName + ".");
+      return false;
+    }
+
+    var command = String(configuredCommand).replace(/[\0\r\n]+$/g, "").trim();
+    if (!command) {
+      console.error("BD UDP configuration error: command " + commandName + " is empty.");
+      return false;
+    }
+
+    return sendUdpCommand(command);
+  }
+
+  function sendBdCommand(commandName) {
+    var transport = String(blurayConfig.transport || "serial").toLowerCase();
+
+    if (!blurayConfig.enabled) {
+      console.warn("BD control is disabled. Enable it in bluray-config.js to send commands.");
+      return false;
+    }
+    if (transport === "udp") return sendBdUdpCommand(commandName);
+    if (transport === "serial") return sendBdSerialCommand(commandName);
+
+    console.error('BD configuration error: transport must be "udp" or "serial".');
+    return false;
   }
 
   function transmitNextBdCommand() {
@@ -287,7 +319,7 @@
   }
 
   function sendUdpCommand(command) {
-    var host = udpConfig.host;
+    var ipAddress = udpConfig.ipAddress;
     var port = Number(udpConfig.port);
 
     if (!udpConfig.enabled) {
@@ -295,8 +327,8 @@
       return false;
     }
 
-    if (!host || !port || port < 1 || 65535 < port) {
-      console.error("UDP configuration error: set a valid host and port.");
+    if (!ipAddress || !port || port < 1 || 65535 < port) {
+      console.error("UDP configuration error: set a valid ipAddress and port.");
       return false;
     }
 
@@ -311,13 +343,13 @@
       var dgram = require("dgram");
       var socket = dgram.createSocket("udp4");
       var payload = Buffer.from(command, "utf8");
-      socket.send(payload, port, host, function (error) {
+      socket.send(payload, port, ipAddress, function (error) {
         socket.close();
         if (error) {
           console.error("UDP send failed: " + error.message);
           return;
         }
-        console.log("UDP sent to " + host + ":" + port + " — " + command);
+        console.log("UDP sent to " + ipAddress + ":" + port + " — " + command);
       });
       return true;
     } catch (error) {
@@ -332,7 +364,7 @@
       expectResponse = false;
     }
     var complete = typeof callback === "function" ? callback : function () {};
-    var host = switcherConfig.host;
+    var ipAddress = switcherConfig.ipAddress;
     var port = Number(switcherConfig.port || 1300);
     var timeoutMs = Number(switcherConfig.timeoutMs || 5000);
     var protocol = String(switcherConfig.protocol || "tcp").toLowerCase();
@@ -346,7 +378,7 @@
       if (error) {
         console.error("US-41 command failed: " + error.message);
       } else {
-        console.log("US-41 command sent to " + host + ":" + port + " — " + command.replace(/\r$/, "[CR]"));
+        console.log("US-41 command sent to " + ipAddress + ":" + port + " — " + command.replace(/\r$/, "[CR]"));
       }
       complete(error, response);
     }
@@ -356,8 +388,8 @@
       return false;
     }
 
-    if (!host || !port || port < 1 || 65535 < port) {
-      finish(new Error("set a valid switcher host and port in switcher-config.js"));
+    if (!ipAddress || !port || port < 1 || 65535 < port) {
+      finish(new Error("set a valid switcher ipAddress and port in switcher-config.js"));
       return false;
     }
 
@@ -384,7 +416,7 @@
         }
         var dgram = require("dgram");
         var udpSocket = dgram.createSocket("udp4");
-        udpSocket.send(Buffer.from(command, "ascii"), port, host, function (error) {
+        udpSocket.send(Buffer.from(command, "ascii"), port, ipAddress, function (error) {
           udpSocket.close();
           finish(error || null);
         });
@@ -392,13 +424,13 @@
       }
 
       var net = require("net");
-      socket = net.createConnection({ host: host, port: port });
+      socket = net.createConnection({ host: ipAddress, port: port });
       switcherActiveSocket = socket;
       var responseBuffer = "";
       socket.setTimeout(timeoutMs);
       socket.setEncoding("ascii");
       socket.once("connect", function () {
-        console.log("US-41 connected to " + host + ":" + port + ".");
+        console.log("US-41 connected to " + ipAddress + ":" + port + ".");
         if (expectResponse) {
           socket.write(command, "ascii", function (error) {
             if (error) finish(error);
@@ -563,7 +595,7 @@
   }
 
   function sendPjLinkCommand(command, callback) {
-    var host = projectorConfig.host;
+    var ipAddress = projectorConfig.ipAddress;
     var port = Number(projectorConfig.port || 4352);
     var timeoutMs = Number(projectorConfig.timeoutMs || 5000);
     var complete = typeof callback === "function" ? callback : function () {};
@@ -580,7 +612,7 @@
       if (error) {
         console.error("PJLink " + commandName + " failed: " + error.message);
       } else {
-        console.log("PJLink " + commandName + " response from " + host + ":" + port + " — " + response);
+        console.log("PJLink " + commandName + " response from " + ipAddress + ":" + port + " — " + response);
       }
       complete(error, response);
     }
@@ -590,8 +622,8 @@
       return false;
     }
 
-    if (!host || !port || port < 1 || 65535 < port) {
-      finish(new Error("set a valid projector host and port in projector-config.js"));
+    if (!ipAddress || !port || port < 1 || 65535 < port) {
+      finish(new Error("set a valid projector ipAddress and port in projector-config.js"));
       return false;
     }
 
@@ -614,7 +646,7 @@
       var net = require("net");
       var crypto = require("crypto");
 
-      socket = net.createConnection({ host: host, port: port });
+      socket = net.createConnection({ host: ipAddress, port: port });
       socket.setEncoding("utf8");
       socket.setTimeout(timeoutMs);
 
@@ -645,7 +677,8 @@
                 .update(greeting[2] + String(projectorConfig.password || ""), "utf8")
                 .digest("hex");
             }
-            socket.write(authenticationPrefix + "%1" + command + "\r", "utf8");
+            var payload = authenticationPrefix + "%1" + command + "\r";
+            socket.write(payload, "utf8");
             continue;
           }
 
@@ -692,6 +725,15 @@
       var button = buttons[index];
       var representsOn = button.classList.contains("projector-power-on");
       var isActive = projectorPowerState === (representsOn ? "on" : "off");
+      button.disabled = !representsOn && projectorPowerOnPending;
+      button.setAttribute("aria-disabled", String(button.disabled));
+      if (!representsOn) {
+        button.setAttribute("aria-label", button.disabled ? "プロジェクター OFF（応答待ち）" : "プロジェクター OFF");
+      }
+      if (button.disabled) {
+        button.classList.remove("pressed");
+        button.classList.remove("deactivating");
+      }
       if (isActive) {
         button.classList.add("is-active");
       } else {
@@ -701,18 +743,48 @@
     }
   }
 
+  function stopProjectorPowerResponseTimeout() {
+    window.clearTimeout(projectorPowerResponseTimeoutTimer);
+    projectorPowerResponseTimeoutTimer = 0;
+  }
+
+  function startProjectorPowerResponseTimeout() {
+    var configuredTimeoutMs = Number(projectorConfig.powerOnResponseTimeoutMs || 15000);
+    var timeoutMs = isFinite(configuredTimeoutMs) && 1000 <= configuredTimeoutMs
+      ? configuredTimeoutMs
+      : 15000;
+    stopProjectorPowerResponseTimeout();
+    projectorPowerResponseTimeoutTimer = window.setTimeout(function () {
+      projectorPowerResponseTimeoutTimer = 0;
+      if (!projectorPowerOnPending) return;
+      projectorPowerOnPending = false;
+      console.error("PJLink power-on status timed out; selecting OFF.");
+      showProjectorDisconnectedState();
+    }, timeoutMs);
+  }
+
   function clearProjectorPowerOnPending() {
     projectorPowerOnPending = false;
+    stopProjectorPowerResponseTimeout();
   }
 
   function applyProjectorPowerResponse(value) {
     if (value === "0") {
+      if (projectorPowerOnPending) {
+        projectorPowerState = "on";
+        projectorAcceptsMute = false;
+        projectorMuteState = false;
+        updateProjectorPowerButtons();
+        updateProjectorMuteButton();
+        return;
+      }
       clearProjectorPowerOnPending();
       projectorPowerState = "off";
       projectorAcceptsMute = false;
       projectorMuteState = false;
     } else if (value === "2") {
       if (projectorPowerOnPending) {
+        startProjectorPowerResponseTimeout();
         projectorPowerState = "on";
         projectorAcceptsMute = false;
         projectorMuteState = false;
@@ -726,7 +798,11 @@
     } else if (value === "1" || value === "3") {
       projectorPowerState = "on";
       projectorAcceptsMute = value === "1";
-      if (value === "1") clearProjectorPowerOnPending();
+      if (value === "1") {
+        clearProjectorPowerOnPending();
+      } else if (projectorPowerOnPending) {
+        startProjectorPowerResponseTimeout();
+      }
     } else {
       return;
     }
@@ -803,15 +879,16 @@
     });
   }
 
-  function refreshProjectorStatus() {
+  function refreshProjectorStatus(callback) {
+    var complete = typeof callback === "function" ? callback : function () {};
     refreshProjectorPowerState(function (error) {
-      if (error) return;
-      if (projectorAcceptsMute && projectorConfig.mutePollingEnabled) {
+      if (!error && projectorAcceptsMute && projectorConfig.mutePollingEnabled) {
         refreshProjectorMuteState();
-      } else if (!projectorAcceptsMute) {
+      } else if (!error && !projectorAcceptsMute) {
         projectorMuteState = false;
         updateProjectorMuteButton();
       }
+      complete(error);
     });
   }
 
@@ -841,7 +918,10 @@
   }
 
   function setProjectorPower(turnOn) {
+    if (!turnOn && projectorPowerOnPending) return;
+
     function sendPowerCommand() {
+      if (!turnOn && projectorPowerOnPending) return;
       sendPjLinkCommand("POWR " + (turnOn ? "1" : "0"), function (error, value) {
         if (error || value !== "OK") {
           showProjectorDisconnectedState();
@@ -852,12 +932,12 @@
         if (!turnOn) projectorMuteState = false;
         updateProjectorPowerButtons();
         updateProjectorMuteButton();
-        if (turnOn) refreshProjectorStatus();
       });
     }
 
     if (turnOn) {
       projectorPowerOnPending = true;
+      startProjectorPowerResponseTimeout();
       projectorPowerState = "on";
       projectorAcceptsMute = false;
       projectorMuteState = false;
@@ -869,6 +949,7 @@
 
     clearProjectorPowerOnPending();
     refreshProjectorPowerState(function (powerQueryError) {
+      if (projectorPowerOnPending) return;
       if (powerQueryError || !projectorAcceptsMute) {
         sendPowerCommand();
         return;
@@ -971,7 +1052,7 @@
 
   function startUdpReceiver() {
     var receivePort = Number(udpConfig.receivePort);
-    var receiveHost = udpConfig.receiveHost || "0.0.0.0";
+    var receiveIpAddress = udpConfig.receiveIpAddress || "0.0.0.0";
 
     if (!udpConfig.receiveEnabled || typeof require !== "function") return;
     if (udpReceiverSocket || udpReceiverStarting) return;
@@ -992,7 +1073,7 @@
       socket.once("listening", function () {
         if (udpReceiverSocket !== socket) return;
         udpReceiverStarting = false;
-        console.log("UDP finish-command receiver listening on " + receiveHost + ":" + receivePort);
+        console.log("UDP finish-command receiver listening on " + receiveIpAddress + ":" + receivePort);
       });
       socket.on("error", function (error) {
         if (udpReceiverSocket !== socket) return;
@@ -1002,7 +1083,7 @@
         closeUdpReceiverSocket(socket);
         scheduleUdpReceiverRetry();
       });
-      socket.bind(receivePort, receiveHost);
+      socket.bind(receivePort, receiveIpAddress);
     } catch (error) {
       closeUdpReceiverSocket(udpReceiverSocket);
       udpReceiverSocket = null;
@@ -1055,6 +1136,7 @@
 
     if (!button.disabled && button.className.indexOf("nav-button") === -1) {
       button.addEventListener("pointerdown", function () {
+        if (button.disabled) return;
         if (!feedbackActive) {
           if (options.reverseWhenActive && button.classList.contains("is-active")) {
             button.classList.add("deactivating");
@@ -1078,7 +1160,7 @@
       });
 
       button.addEventListener("click", function () {
-        if (feedbackActive) return;
+        if (button.disabled || feedbackActive) return;
         feedbackActive = true;
         if (options.reverseWhenActive && button.classList.contains("is-active")) {
           button.classList.add("deactivating");
@@ -1088,7 +1170,7 @@
         window.clearTimeout(feedbackTimer);
         if (options.onClick) {
           actionTimer = window.setTimeout(function () {
-            options.onClick();
+            if (!button.disabled) options.onClick();
           }, BUTTON_ACTION_DELAY_MS);
         }
         feedbackTimer = window.setTimeout(function () {
