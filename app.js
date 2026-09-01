@@ -102,6 +102,8 @@
   var bdAckTimeoutTimer = 0;
   var bdQueueTimer = 0;
   var bdLastCommandTime = 0;
+  var activeActionButton = null;
+  var activeActionPointerId = null;
 
   function closeBdSerialPort() {
     window.clearTimeout(bdAckTimeoutTimer);
@@ -725,7 +727,7 @@
       var button = buttons[index];
       var representsOn = button.classList.contains("projector-power-on");
       var isActive = projectorPowerState === (representsOn ? "on" : "off");
-      button.disabled = !representsOn && projectorPowerOnPending;
+      button.disabled = representsOn ? projectorPowerState === "on" : projectorPowerOnPending;
       button.setAttribute("aria-disabled", String(button.disabled));
       if (!representsOn) {
         button.setAttribute("aria-label", button.disabled ? "プロジェクター OFF（応答待ち）" : "プロジェクター OFF");
@@ -918,6 +920,7 @@
   }
 
   function setProjectorPower(turnOn) {
+    if (turnOn && projectorPowerState === "on") return;
     if (!turnOn && projectorPowerOnPending) return;
 
     function sendPowerCommand() {
@@ -1124,6 +1127,10 @@
     var actionTimer = 0;
     var feedbackTimer = 0;
     var feedbackActive = false;
+    var pointerPressed = false;
+    var ignoredPointerId = null;
+    var suppressNextClick = false;
+    var clickSuppressionTimer = 0;
     button.type = "button";
     button.className = "ui-button " + options.className;
     button.setAttribute("aria-label", options.label);
@@ -1135,32 +1142,13 @@
     button.disabled = Boolean(options.disabled);
 
     if (!button.disabled && button.className.indexOf("nav-button") === -1) {
-      button.addEventListener("pointerdown", function () {
-        if (button.disabled) return;
-        if (!feedbackActive) {
-          if (options.reverseWhenActive && button.classList.contains("is-active")) {
-            button.classList.add("deactivating");
-          }
-          button.classList.add("pressed");
-        }
-      });
+      function clearPressedState() {
+        button.classList.remove("pressed");
+        button.classList.remove("deactivating");
+      }
 
-      button.addEventListener("pointercancel", function () {
-        if (!feedbackActive) {
-          button.classList.remove("pressed");
-          button.classList.remove("deactivating");
-        }
-      });
-
-      button.addEventListener("pointerleave", function (event) {
-        if (!feedbackActive && event.buttons) {
-          button.classList.remove("pressed");
-          button.classList.remove("deactivating");
-        }
-      });
-
-      button.addEventListener("click", function () {
-        if (button.disabled || feedbackActive) return;
+      function beginFeedback() {
+        if (button.disabled || feedbackActive) return false;
         feedbackActive = true;
         if (options.reverseWhenActive && button.classList.contains("is-active")) {
           button.classList.add("deactivating");
@@ -1175,11 +1163,97 @@
         }
         feedbackTimer = window.setTimeout(function () {
           if (button.isConnected) {
-            button.classList.remove("pressed");
-            button.classList.remove("deactivating");
+            clearPressedState();
             feedbackActive = false;
           }
         }, BUTTON_FEEDBACK_MS);
+        return true;
+      }
+
+      function releaseActionPointer() {
+        if (activeActionButton !== button) return;
+        activeActionButton = null;
+        activeActionPointerId = null;
+      }
+
+      function suppressCompatibilityClick() {
+        suppressNextClick = true;
+        window.clearTimeout(clickSuppressionTimer);
+        clickSuppressionTimer = window.setTimeout(function () {
+          clickSuppressionTimer = 0;
+          suppressNextClick = false;
+        }, 0);
+      }
+
+      button.addEventListener("pointerdown", function (event) {
+        if (button.disabled || feedbackActive) return;
+        if (activeActionButton && activeActionButton !== button) {
+          ignoredPointerId = event.pointerId;
+          return;
+        }
+        if (activeActionButton === button && activeActionPointerId !== event.pointerId) {
+          ignoredPointerId = event.pointerId;
+          return;
+        }
+
+        activeActionButton = button;
+        activeActionPointerId = event.pointerId;
+        pointerPressed = true;
+        if (options.reverseWhenActive && button.classList.contains("is-active")) {
+          button.classList.add("deactivating");
+        }
+        button.classList.add("pressed");
+        if (typeof button.setPointerCapture === "function") {
+          try {
+            button.setPointerCapture(event.pointerId);
+          } catch (error) {
+            console.warn("Pointer capture was unavailable: " + error.message);
+          }
+        }
+      });
+
+      button.addEventListener("pointerup", function (event) {
+        if (ignoredPointerId === event.pointerId) {
+          ignoredPointerId = null;
+          suppressCompatibilityClick();
+          if (event.preventDefault) event.preventDefault();
+          return;
+        }
+        if (!pointerPressed || activeActionPointerId !== event.pointerId) return;
+        pointerPressed = false;
+        releaseActionPointer();
+        suppressCompatibilityClick();
+        if (event.preventDefault) event.preventDefault();
+        beginFeedback();
+      });
+
+      button.addEventListener("pointercancel", function (event) {
+        if (ignoredPointerId === event.pointerId) {
+          ignoredPointerId = null;
+          return;
+        }
+        if (!pointerPressed || activeActionPointerId !== event.pointerId) return;
+        pointerPressed = false;
+        releaseActionPointer();
+        if (!feedbackActive) clearPressedState();
+      });
+
+      button.addEventListener("pointerleave", function (event) {
+        if (event.pointerType === "mouse" && pointerPressed && event.buttons) {
+          pointerPressed = false;
+          releaseActionPointer();
+          if (!feedbackActive) clearPressedState();
+        }
+      });
+
+      button.addEventListener("click", function () {
+        if (suppressNextClick) {
+          window.clearTimeout(clickSuppressionTimer);
+          clickSuppressionTimer = 0;
+          suppressNextClick = false;
+          return;
+        }
+        beginFeedback();
       });
     } else if (!button.disabled && options.onClick) {
       button.addEventListener("click", options.onClick);

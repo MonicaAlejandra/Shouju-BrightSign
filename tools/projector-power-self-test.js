@@ -162,19 +162,26 @@ function checkOffDisabled(panel, disabled) {
   assert.strictEqual(button.attributes["aria-disabled"], String(disabled), "OFF accessibility state");
   var expectedLabel = disabled ? "プロジェクター OFF（応答待ち）" : "プロジェクター OFF";
   assert.strictEqual(button.attributes["aria-label"], expectedLabel, "OFF waiting description");
-  assert.strictEqual(panel.button("projector-power-on").disabled, false, "ON must remain available");
+}
+
+function checkOnDisabled(panel, disabled) {
+  var button = panel.button("projector-power-on");
+  assert.strictEqual(button.disabled, disabled, "ON disabled state");
+  assert.strictEqual(button.attributes["aria-disabled"], String(disabled), "ON accessibility state");
 }
 
 function startPowerOn(panel) {
   panel.button("projector-power-on").dispatch("click");
   panel.clock.advance(520);
   checkOffDisabled(panel, true);
+  checkOnDisabled(panel, true);
   panel.reply("POWR 1", "OK");
   assert.strictEqual(panel.pendingCount(), 0, "ON must not trigger an immediate status query");
 }
 
 function testTimeout(panel) {
   checkOffDisabled(panel, false);
+  checkOnDisabled(panel, false);
   startPowerOn(panel);
   var offButton = panel.button("projector-power-off");
   offButton.dispatch("pointerdown");
@@ -192,6 +199,7 @@ function testTimeout(panel) {
   assert.strictEqual(panel.requests.indexOf("%1POWR 0\r"), -1, "OFF must not be transmitted while pending");
   panel.clock.advance(1);
   checkOffDisabled(panel, false);
+  checkOnDisabled(panel, false);
   assert.strictEqual(offButton.classList.contains("is-active"), true, "Timeout selects OFF");
   offButton.dispatch("click");
   panel.clock.advance(520);
@@ -208,12 +216,14 @@ function testConfirmedOnAndRerender(panel) {
   panel.reply("POWR ?", "1");
   panel.reply("AVMT ?", "30");
   checkOffDisabled(panel, false);
+  checkOnDisabled(panel, true);
   assert.strictEqual(panel.button("projector-power-on").classList.contains("is-active"), true);
   panel.button("projector-power-off").dispatch("click");
   panel.clock.advance(520);
   panel.reply("POWR ?", "1");
   panel.reply("AVMT 30", "OK");
   panel.reply("POWR 0", "OK");
+  checkOnDisabled(panel, false);
 }
 
 function testTransitionAndFailure(panel) {
@@ -221,6 +231,7 @@ function testTransitionAndFailure(panel) {
   panel.clock.advance(4480);
   panel.reply("POWR ?", "3");
   checkOffDisabled(panel, true);
+  checkOnDisabled(panel, true);
   panel.clock.advance(5000);
   panel.reply("POWR ?", "2");
   checkOffDisabled(panel, true);
@@ -231,6 +242,26 @@ function testTransitionAndFailure(panel) {
   checkOffDisabled(panel, true);
   panel.clock.advance(1);
   checkOffDisabled(panel, false);
+  checkOnDisabled(panel, false);
+}
+
+function testDuplicateOnIgnored(panel) {
+  startPowerOn(panel);
+  var requestCount = panel.requests.length;
+  panel.button("projector-power-on").dispatch("pointerdown");
+  panel.button("projector-power-on").dispatch("click");
+  panel.clock.advance(520);
+  assert.strictEqual(panel.requests.length, requestCount, "Pending ON must not be sent twice");
+  assert.strictEqual(panel.button("projector-power-on").classList.contains("pressed"), false);
+
+  panel.clock.advance(3960);
+  panel.reply("POWR ?", "1");
+  panel.reply("AVMT ?", "30");
+  checkOnDisabled(panel, true);
+  requestCount = panel.requests.length;
+  panel.button("projector-power-on").dispatch("click");
+  panel.clock.advance(520);
+  assert.strictEqual(panel.requests.length, requestCount, "Confirmed ON must not be sent twice");
 }
 
 function testQueuedPress(panel) {
@@ -269,7 +300,7 @@ try {
   var appPath = path.join(__dirname, "..", "app.js");
   var source = fs.readFileSync(appPath, "utf8");
   var tests = [testTimeout, testConfirmedOnAndRerender, testTransitionAndFailure,
-    testQueuedPress, testOffPreflightDuringOn, testOnFailure];
+    testDuplicateOnIgnored, testQueuedPress, testOffPreflightDuringOn, testOnFailure];
   tests.forEach(function (test) {
     var panel = createHarness(source);
     test(panel);
