@@ -1,0 +1,28 @@
+{
+  "videos": [
+    { "id": 1, "ja": "しょうゆの不思議", "en": "The Wonders of Shoyu" },
+    { "id": 2, "ja": "しょうゆっちとしょうゆ工場", "en": "Shoyucchi & Factory" },
+    { "id": 3, "ja": "世界の食卓を彩る", "en": "Coloring the World's Table" },
+    { "id": 4, "ja": "英語", "en": "English" },
+    { "id": 5, "ja": "中国語", "en": "Chinese" },
+    { "id": 6, "ja": "韓国語", "en": "Korean" },
+    { "id": 7, "ja": "タイ語", "en": "Thai" },
+    { "id": 8, "ja": "インドネシア語", "en": "Indonesian" },
+    { "id": 9, "ja": "ベトナム語", "en": "Vietnamese" },
+    { "id": 10, "ja": "タガログ語", "en": "Tagalog" },
+    { "id": 11, "ja": "ドイツ語", "en": "German" },
+    { "id": 12, "ja": "フランス語", "en": "French" },
+    { "id": 13, "ja": "イタリア語", "en": "Italian" },
+    { "id": 14, "ja": "スペイン語", "en": "Spanish" },
+    { "id": 15, "ja": "ロシア語", "en": "Russian" },
+    { "id": 16, "ja": "ポルトガル語", "en": "Portuguese" },
+    { "id": 17, "ja": "大人用（日本語）", "en": "Adult (Japanese)" },
+    { "id": 18, "ja": "大人用（英語）", "en": "Adult (English)" },
+    { "id": 19, "ja": "子ども用", "en": "Children" },
+    { "id": 20, "ja": "テスト（1）", "en": "Spare (1)" },
+    { "id": 21, "ja": "予備（2）", "en": "Spare (2)" },
+    { "id": 22, "ja": "予備（3）", "en": "Spare (3)" },
+    { "id": 23, "ja": "予備（4）", "en": "Spare (4)" },
+    { "id": 24, "ja": "予備（5）", "en": "Spare (5)" }
+  ]
+}

@@ -9,6 +9,7 @@
   var PAGE_TRANSITION_MS = 700;
   var UDP_RECEIVER_INITIAL_DELAY_MS = 1500;
   var UDP_RECEIVER_RETRY_MS = 5000;
+  var INTRO_VIDEO_CONFIG_TIMEOUT_MS = 3000;
   var udpConfig = window.BRIGHTSIGN_UDP_CONFIG || {};
   var projectorConfig = window.BRIGHTSIGN_PROJECTOR_CONFIG || {};
   var switcherConfig = window.BRIGHTSIGN_SWITCHER_CONFIG || {};
@@ -16,7 +17,7 @@
 
   var pages = {
     projector: { image: "assets/projector-control-panel.png", alt: "プロジェクター操作" },
-    intro: { image: "assets/intro-video-selection.png", alt: "紹介映像 選択" },
+    intro: { image: "assets/intro-video-selection.png?v=20260903-1", alt: "紹介映像 選択" },
     playback: { image: "assets/video-playback.png", alt: "紹介映像 再生中" },
     bdDisc: { image: "assets/bluray-disc-control.png", alt: "ブルーレイディスク 再生操作" },
     bdNavigation: { image: "assets/bluray-navigation.png", alt: "ブルーレイディスク メニュー操作" },
@@ -59,14 +60,14 @@
     { ja: "スペイン語", en: "Spanish" },
     { ja: "ロシア語", en: "Russian" },
     { ja: "ポルトガル語", en: "Portuguese" },
-    { ja: "大人用", en: "Adult" },
+    { ja: "大人用（日本語）", en: "Adult (Japanese)" },
+    { ja: "大人用（英語）", en: "Adult (English)" },
     { ja: "子ども用", en: "Children" },
     { ja: "予備（1）", en: "Spare (1)", spare: true },
     { ja: "予備（2）", en: "Spare (2)", spare: true },
     { ja: "予備（3）", en: "Spare (3)", spare: true },
     { ja: "予備（4）", en: "Spare (4)", spare: true },
-    { ja: "予備（5）", en: "Spare (5)", spare: true },
-    { ja: "予備（6）", en: "Spare (6)", spare: true }
+    { ja: "予備（5）", en: "Spare (5)", spare: true }
   ];
 
   var stage = document.getElementById("stage");
@@ -75,6 +76,7 @@
   var currentPage = "projector";
   var selectedPlaybackImage = "assets/video-playback-01.png";
   var selectedPlaybackLabel = introButtons[0].ja;
+  var selectedPlaybackIndex = 0;
   var isVideoPlaying = false;
   var projectorPowerState = "off";
   var projectorAcceptsMute = false;
@@ -104,6 +106,91 @@
   var bdLastCommandTime = 0;
   var activeActionButton = null;
   var activeActionPointerId = null;
+
+  function applyIntroVideoConfig(config) {
+    var configuredButtons = new Array(introButtons.length);
+    var seenIds = {};
+    var videos = config && config.videos;
+
+    if (!Array.isArray(videos) || videos.length !== introButtons.length) {
+      throw new Error("intro-videos.json must contain exactly " + introButtons.length + " videos.");
+    }
+
+    for (var index = 0; index < videos.length; index += 1) {
+      var video = videos[index];
+      var id = Number(video && video.id);
+      var japaneseName = video && typeof video.ja === "string" ? video.ja.trim() : "";
+      var englishName = video && typeof video.en === "string" ? video.en.trim() : "";
+
+      if (!Number.isInteger(id) || id < 1 || introButtons.length < id) {
+        throw new Error("Each intro video needs an id from 1 to " + introButtons.length + ".");
+      }
+      if (seenIds[id]) {
+        throw new Error("Duplicate intro-video id: " + id + ".");
+      }
+      if (!japaneseName || !englishName) {
+        throw new Error("Intro-video id " + id + " needs both ja and en names.");
+      }
+
+      seenIds[id] = true;
+      configuredButtons[id - 1] = {
+        ja: japaneseName,
+        en: englishName,
+        spare: introButtons[id - 1].spare
+      };
+    }
+
+    introButtons = configuredButtons;
+    selectedPlaybackLabel = introButtons[selectedPlaybackIndex].ja;
+  }
+
+  function loadIntroVideoConfig(callback) {
+    var completed = false;
+    var request;
+
+    function finish() {
+      if (completed) return;
+      completed = true;
+      callback();
+    }
+
+    if (typeof XMLHttpRequest !== "function") {
+      console.warn("intro-videos.json could not be loaded; built-in button names will be used.");
+      finish();
+      return;
+    }
+
+    try {
+      request = new XMLHttpRequest();
+      request.open("GET", "intro-videos.json?v=" + Date.now(), true);
+      request.timeout = INTRO_VIDEO_CONFIG_TIMEOUT_MS;
+      request.onreadystatechange = function () {
+        if (request.readyState !== 4 || completed) return;
+        try {
+          if (request.status !== 0 && request.status !== 200) {
+            throw new Error("HTTP status " + request.status);
+          }
+          applyIntroVideoConfig(JSON.parse(request.responseText));
+          console.log("Introduction-video names loaded from intro-videos.json.");
+        } catch (error) {
+          console.error("Invalid intro-videos.json; built-in button names will be used: " + error.message);
+        }
+        finish();
+      };
+      request.onerror = function () {
+        console.error("intro-videos.json could not be loaded; built-in button names will be used.");
+        finish();
+      };
+      request.ontimeout = function () {
+        console.error("intro-videos.json load timed out; built-in button names will be used.");
+        finish();
+      };
+      request.send();
+    } catch (error) {
+      console.error("intro-videos.json could not be loaded; built-in button names will be used: " + error.message);
+      finish();
+    }
+  }
 
   function closeBdSerialPort() {
     window.clearTimeout(bdAckTimeoutTimer);
@@ -1138,7 +1225,16 @@
     button.style.top = options.y + "px";
     button.style.width = options.width + "px";
     button.style.height = options.height + "px";
-    button.innerHTML = options.content;
+    if (Array.isArray(options.contentLines)) {
+      for (var contentIndex = 0; contentIndex < options.contentLines.length; contentIndex += 1) {
+        var contentLine = document.createElement("span");
+        contentLine.className = options.contentLines[contentIndex].className;
+        contentLine.textContent = options.contentLines[contentIndex].text;
+        button.appendChild(contentLine);
+      }
+    } else {
+      button.innerHTML = options.content;
+    }
     button.disabled = Boolean(options.disabled);
 
     if (!button.disabled && button.className.indexOf("nav-button") === -1) {
@@ -1353,8 +1449,12 @@
           y: rows[row],
           width: widths[column],
           height: 76,
-          content: '<span class="ja">' + item.ja + '</span><span class="en">' + item.en + "</span>",
+          contentLines: [
+            { className: "ja", text: item.ja },
+            { className: "en", text: item.en }
+          ],
           onClick: function () {
+            selectedPlaybackIndex = itemIndex;
             selectedPlaybackImage = getPlaybackImagePath(itemIndex);
             selectedPlaybackLabel = item.ja;
             isVideoPlaying = true;
@@ -1370,6 +1470,17 @@
   }
 
   function addPlaybackControls() {
+    var playbackLabel = document.createElement("div");
+    var playbackTitle = document.createElement("span");
+    var playbackStatus = document.createElement("span");
+    playbackLabel.className = "playback-label";
+    playbackLabel.setAttribute("aria-hidden", "true");
+    playbackTitle.textContent = selectedPlaybackLabel;
+    playbackStatus.textContent = "再生中";
+    playbackLabel.appendChild(playbackTitle);
+    playbackLabel.appendChild(playbackStatus);
+    buttonLayer.appendChild(playbackLabel);
+
     addButton({
       label: "再生中止",
       className: "playback-stop",
@@ -1525,6 +1636,9 @@
   };
   resizeStage();
   showPage("projector");
-  window.setTimeout(preloadPageImages, 0);
+  loadIntroVideoConfig(function () {
+    preloadPageImages();
+    if (currentPage === "intro" || currentPage === "playback") renderPage(currentPage);
+  });
   window.setTimeout(startUdpReceiver, UDP_RECEIVER_INITIAL_DELAY_MS);
 }());

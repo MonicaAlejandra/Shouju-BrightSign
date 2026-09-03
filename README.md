@@ -22,7 +22,9 @@ Action buttons use a continuous multi-stage blend from gray through a pale white
 
 Action controls use first-touch-wins handling. If two action buttons are touched at the same time, only the first touch is accepted; the second is ignored and cannot leave its button stuck red. This prevents conflicting video selections and overlapping device commands.
 
-The 24 introduction-selection buttons map in row order to `assets/video-playback-01.png` through `assets/video-playback-24.png`. This includes the six enabled `予備` buttons, mapped to panels 19–24.
+The 24 introduction-selection buttons map in row order to `assets/video-playback-01.png` through `assets/video-playback-24.png`. Panels 17–19 are the Japanese adult, English adult, and children selections. The five enabled `予備` buttons map to panels 20–24. The playback title is rendered from the selected button label so it stays synchronized with this mapping.
+
+To rename an introduction-video button, edit its `ja` and `en` values in `intro-videos.json`, then reload the panel. Keep all 24 unique `id` values; the ID controls the button position, `PLAY_XX` command number, and numbered playback panel. Invalid or unavailable JSON is reported in the console and the panel safely uses its built-in names. BrightSign local-site deployments can load the JSON directly. For desktop Chrome or Edge testing, serve this folder from localhost instead of opening `index.html` as a `file://` URL, because desktop browsers may block local JSON requests.
 
 ## Introduction-video UDP command test
 
