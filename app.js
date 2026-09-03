@@ -10,6 +10,7 @@
   var UDP_RECEIVER_INITIAL_DELAY_MS = 1500;
   var UDP_RECEIVER_RETRY_MS = 5000;
   var INTRO_VIDEO_CONFIG_TIMEOUT_MS = 3000;
+  var EXTERNAL_INTRO_VIDEO_CONFIG_PATH = "/storage/sd/intro-videos.json";
   var udpConfig = window.BRIGHTSIGN_UDP_CONFIG || {};
   var projectorConfig = window.BRIGHTSIGN_PROJECTOR_CONFIG || {};
   var switcherConfig = window.BRIGHTSIGN_SWITCHER_CONFIG || {};
@@ -144,7 +145,7 @@
     selectedPlaybackLabel = introButtons[selectedPlaybackIndex].ja;
   }
 
-  function loadIntroVideoConfig(callback) {
+  function loadBundledIntroVideoConfig(callback) {
     var completed = false;
     var request;
 
@@ -155,7 +156,7 @@
     }
 
     if (typeof XMLHttpRequest !== "function") {
-      console.warn("intro-videos.json could not be loaded; built-in button names will be used.");
+      console.warn("Bundled intro-videos.json could not be loaded; built-in button names will be used.");
       finish();
       return;
     }
@@ -171,25 +172,63 @@
             throw new Error("HTTP status " + request.status);
           }
           applyIntroVideoConfig(JSON.parse(request.responseText));
-          console.log("Introduction-video names loaded from intro-videos.json.");
+          console.log("Introduction-video names loaded from bundled intro-videos.json.");
         } catch (error) {
-          console.error("Invalid intro-videos.json; built-in button names will be used: " + error.message);
+          console.error("Invalid bundled intro-videos.json; built-in button names will be used: " + error.message);
         }
         finish();
       };
       request.onerror = function () {
-        console.error("intro-videos.json could not be loaded; built-in button names will be used.");
+        console.error("Bundled intro-videos.json could not be loaded; built-in button names will be used.");
         finish();
       };
       request.ontimeout = function () {
-        console.error("intro-videos.json load timed out; built-in button names will be used.");
+        console.error("Bundled intro-videos.json load timed out; built-in button names will be used.");
         finish();
       };
       request.send();
     } catch (error) {
-      console.error("intro-videos.json could not be loaded; built-in button names will be used: " + error.message);
+      console.error("Bundled intro-videos.json could not be loaded; built-in button names will be used: " + error.message);
       finish();
     }
+  }
+
+  function loadIntroVideoConfig(callback) {
+    var fileSystem;
+
+    if (typeof require !== "function") {
+      loadBundledIntroVideoConfig(callback);
+      return;
+    }
+
+    try {
+      fileSystem = require("fs");
+    } catch (error) {
+      console.warn("External intro-video configuration is unavailable: " + error.message);
+      loadBundledIntroVideoConfig(callback);
+      return;
+    }
+
+    fileSystem.readFile(EXTERNAL_INTRO_VIDEO_CONFIG_PATH, "utf8", function (readError, content) {
+      if (readError) {
+        if (readError.code === "ENOENT") {
+          console.log("No external intro-videos.json found; loading the bundled configuration.");
+        } else {
+          console.warn("External intro-videos.json could not be read; loading the bundled configuration: " + readError.message);
+        }
+        loadBundledIntroVideoConfig(callback);
+        return;
+      }
+
+      try {
+        applyIntroVideoConfig(JSON.parse(content));
+        console.log("Introduction-video names loaded from " + EXTERNAL_INTRO_VIDEO_CONFIG_PATH + ".");
+        callback();
+      } catch (error) {
+        console.error("Invalid external intro-videos.json; loading the bundled configuration: " + error.message);
+        loadBundledIntroVideoConfig(callback);
+      }
+    });
   }
 
   function closeBdSerialPort() {

@@ -24,7 +24,7 @@ Action controls use first-touch-wins handling. If two action buttons are touched
 
 The 24 introduction-selection buttons map in row order to `assets/video-playback-01.png` through `assets/video-playback-24.png`. Panels 17–19 are the Japanese adult, English adult, and children selections. The five enabled `予備` buttons map to panels 20–24. The playback title is rendered from the selected button label so it stays synchronized with this mapping.
 
-To rename an introduction-video button, edit its `ja` and `en` values in `intro-videos.json`, then reload the panel. Keep all 24 unique `id` values; the ID controls the button position, `PLAY_XX` command number, and numbered playback panel. Invalid or unavailable JSON is reported in the console and the panel safely uses its built-in names. BrightSign local-site deployments can load the JSON directly. For desktop Chrome or Edge testing, serve this folder from localhost instead of opening `index.html` as a `file://` URL, because desktop browsers may block local JSON requests.
+To rename an introduction-video button on the player, upload `intro-videos.json` to the root of the SD storage in DWS (`/sd/intro-videos.json`), then manually reboot the player. At startup, the application first reads `/storage/sd/intro-videos.json`. If that external file is missing, unreadable, or invalid, it loads the `intro-videos.json` bundled with the published HTML site. If neither file can be loaded, the panel safely uses its built-in names. Keep all 24 unique `id` values; the ID controls the button position, `PLAY_XX` command number, and numbered playback panel. For desktop Chrome or Edge testing, serve this folder from localhost; the browser uses the bundled JSON because it cannot access the player's `/storage/sd` filesystem.
 
 ## Introduction-video UDP command test
 
@@ -74,6 +74,7 @@ For an XC4055-to-PC output test, connect a real RS-232 adapter—not a TTL UART 
 Run the offline framing self-test from this folder with:
 
 ```powershell
+node .\tools\intro-video-config-self-test.js
 node .\tools\bluray-serial-self-test.js
 node .\tools\bluray-udp-self-test.js
 ```
