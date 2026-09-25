@@ -47,6 +47,7 @@ var projectRoot = path.join(__dirname, "..");
 var config = JSON.parse(fs.readFileSync(path.join(projectRoot, "intro-videos.json"), "utf8"));
 config.videos[0].ja = "外部設定テスト";
 config.videos[0].en = "External Config Test";
+var externalConfigText = "\uFEFF" + JSON.stringify(config, null, 2).replace(/\n/g, "\r\n") + "\r\n";
 var requestedPath = "";
 var elements = {
   stage: createElementStub(),
@@ -66,7 +67,7 @@ var context = {
     return {
       readFile: function (filePath, encoding, callback) {
         requestedPath = filePath;
-        callback(null, JSON.stringify(config));
+        callback(null, externalConfigText);
       }
     };
   },
@@ -101,4 +102,4 @@ var externalButton = elements.hotspots.children.filter(function (button) {
 assert.ok(externalButton, "Expected the external JSON name to override the bundled name");
 assert.strictEqual(externalButton.children[1].textContent, "External Config Test");
 
-console.log("Intro-video config self-test passed: external SD JSON path and names took priority.");
+console.log("Intro-video config self-test passed: BOM and CRLF were accepted and external SD names took priority.");

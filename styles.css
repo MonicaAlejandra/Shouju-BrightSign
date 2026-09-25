@@ -168,9 +168,9 @@ button {
 .playback-label {
   position: absolute;
   top: 320px;
-  left: 400px;
+  left: 320px;
   display: flex;
-  width: 480px;
+  width: 640px;
   height: 170px;
   align-items: center;
   justify-content: center;
@@ -181,7 +181,17 @@ button {
   font-size: 42px;
   font-weight: 700;
   line-height: 1.25;
+  text-align: center;
   pointer-events: none;
+}
+
+.playback-label span {
+  display: block;
+  width: 100%;
+}
+
+.playback-label span:first-child {
+  white-space: nowrap;
 }
 
 .bd-playback-button {

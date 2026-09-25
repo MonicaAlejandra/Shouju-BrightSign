@@ -108,6 +108,12 @@
   var activeActionButton = null;
   var activeActionPointerId = null;
 
+  function parseIntroVideoConfig(content) {
+    var normalizedContent = String(content).replace(/^\uFEFF/, "");
+    normalizedContent = normalizedContent.replace(/\r\n?/g, "\n");
+    return JSON.parse(normalizedContent);
+  }
+
   function applyIntroVideoConfig(config) {
     var configuredButtons = new Array(introButtons.length);
     var seenIds = {};
@@ -171,7 +177,7 @@
           if (request.status !== 0 && request.status !== 200) {
             throw new Error("HTTP status " + request.status);
           }
-          applyIntroVideoConfig(JSON.parse(request.responseText));
+          applyIntroVideoConfig(parseIntroVideoConfig(request.responseText));
           console.log("Introduction-video names loaded from bundled intro-videos.json.");
         } catch (error) {
           console.error("Invalid bundled intro-videos.json; built-in button names will be used: " + error.message);
@@ -221,7 +227,7 @@
       }
 
       try {
-        applyIntroVideoConfig(JSON.parse(content));
+        applyIntroVideoConfig(parseIntroVideoConfig(content));
         console.log("Introduction-video names loaded from " + EXTERNAL_INTRO_VIDEO_CONFIG_PATH + ".");
         callback();
       } catch (error) {
