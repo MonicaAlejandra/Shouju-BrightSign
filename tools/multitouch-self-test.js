@@ -24,7 +24,14 @@ function createElementStub() {
       });
     },
     removeAttribute: function () {},
-    cloneNode: function () { return createElementStub(); },
+    cloneNode: function (deep) {
+      var clone = createElementStub();
+      clone.className = element.className;
+      if (deep) {
+        clone.children = element.children.map(function (child) { return child.cloneNode(true); });
+      }
+      return clone;
+    },
     dispatch: function (name, event) {
       var input = event || {};
       input.preventDefault = input.preventDefault || function () {};
@@ -138,32 +145,32 @@ var context = {
 var appPath = path.join(__dirname, "..", "app.js");
 vm.runInNewContext(fs.readFileSync(appPath, "utf8"), context, { filename: "app.js" });
 
-var bdNavigationButton = elements.hotspots.children.filter(function (button) {
-  return button.attributes["aria-label"] === "ＢＤ";
+var introNavigationButton = elements.hotspots.children.filter(function (button) {
+  return button.attributes["aria-label"] === "紹介映像";
 })[0];
-bdNavigationButton.dispatch("click");
+introNavigationButton.dispatch("click");
 
-var bdButtons = elements.hotspots.querySelectorAll(".bd-playback-button");
-assert.strictEqual(bdButtons.length, 2, "Expected Play and Stop buttons");
+var introButtons = elements.hotspots.querySelectorAll(".intro-button");
+assert.strictEqual(introButtons.length, 24, "Expected introduction-video buttons");
 
-bdButtons[0].dispatch("pointerdown", { pointerId: 1, pointerType: "touch", buttons: 1 });
-bdButtons[1].dispatch("pointerdown", { pointerId: 2, pointerType: "touch", buttons: 1 });
-assert.strictEqual(bdButtons[0].classList.contains("pressed"), true, "First touch should show feedback");
-assert.strictEqual(bdButtons[1].classList.contains("pressed"), false, "Second simultaneous touch must be ignored");
+introButtons[0].dispatch("pointerdown", { pointerId: 1, pointerType: "touch", buttons: 1 });
+introButtons[1].dispatch("pointerdown", { pointerId: 2, pointerType: "touch", buttons: 1 });
+assert.strictEqual(introButtons[0].classList.contains("pressed"), true, "First touch should show feedback");
+assert.strictEqual(introButtons[1].classList.contains("pressed"), false, "Second simultaneous touch must be ignored");
 
-bdButtons[1].dispatch("pointerup", { pointerId: 2, pointerType: "touch", buttons: 0 });
-bdButtons[1].dispatch("click");
+introButtons[1].dispatch("pointerup", { pointerId: 2, pointerType: "touch", buttons: 0 });
+introButtons[1].dispatch("click");
 clock.advance(520);
 assert.strictEqual(sentPackets.length, 0, "Ignored second touch must not send a command");
 
-bdButtons[0].dispatch("pointerup", { pointerId: 1, pointerType: "touch", buttons: 0 });
-bdButtons[0].dispatch("click");
+introButtons[0].dispatch("pointerup", { pointerId: 1, pointerType: "touch", buttons: 0 });
+introButtons[0].dispatch("click");
 clock.advance(519);
 assert.strictEqual(sentPackets.length, 0, "Accepted command must keep its normal feedback delay");
 clock.advance(1);
-assert.deepStrictEqual(sentPackets, [{ payload: "BD_PLAY", port: 5001, ipAddress: "192.0.2.10" }]);
+assert.deepStrictEqual(sentPackets, [{ payload: "PLAY_01", port: 5001, ipAddress: "192.0.2.10" }]);
 clock.advance(260);
-assert.strictEqual(bdButtons[0].classList.contains("pressed"), false, "Accepted button must clear red feedback");
-assert.strictEqual(bdButtons[1].classList.contains("pressed"), false, "Ignored button must remain clear");
+assert.strictEqual(introButtons[0].classList.contains("pressed"), false, "Accepted button must clear red feedback");
+assert.strictEqual(introButtons[1].classList.contains("pressed"), false, "Ignored button must remain clear");
 
 console.log("Multi-touch self-test passed: first touch sent once, second touch was ignored, and feedback cleared.");

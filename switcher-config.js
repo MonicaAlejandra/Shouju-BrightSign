@@ -18,6 +18,7 @@ window.BRIGHTSIGN_SWITCHER_CONFIG = {
     hdmi: 1,
     intro: 2,
     bd: 3,
+    bdControls: 3,
     vga: 4
   }
 };

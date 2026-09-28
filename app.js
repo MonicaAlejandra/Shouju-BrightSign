@@ -15,11 +15,13 @@
   var projectorConfig = window.BRIGHTSIGN_PROJECTOR_CONFIG || {};
   var switcherConfig = window.BRIGHTSIGN_SWITCHER_CONFIG || {};
   var blurayConfig = window.BRIGHTSIGN_BLURAY_CONFIG || {};
+  var uiConfig = window.BRIGHTSIGN_UI_CONFIG || {};
 
   var pages = {
     projector: { image: "assets/projector-control-panel.png", alt: "プロジェクター操作" },
     intro: { image: "assets/intro-video-selection.png?v=20260903-1", alt: "紹介映像 選択" },
     playback: { image: "assets/video-playback.png", alt: "紹介映像 再生中" },
+    bdSource: { image: "assets/bd-simple-control.png", alt: "ブルーレイディスク 操作" },
     bdDisc: { image: "assets/bluray-disc-control.png", alt: "ブルーレイディスク 再生操作" },
     bdNavigation: { image: "assets/bluray-navigation.png", alt: "ブルーレイディスク メニュー操作" },
     hdmi: { image: "assets/pc-hdmi-control.png", alt: "PC HDMI 表示" },
@@ -27,22 +29,57 @@
   };
 
   var navigation = [
-    { id: "projector", label: "プロジェクター", page: "projector", x: 0 },
-    { id: "intro", label: "紹介映像", page: "intro", x: 256 },
-    { id: "bd", label: "ＢＤ", page: "bdDisc", x: 512 },
-    { id: "hdmi", label: "PC (HDMI)", page: "hdmi", x: 768 },
-    { id: "vga", label: "PC (VGA)", page: "vga", x: 1024 }
+    { id: "projector", label: "プロジェクター", page: "projector" },
+    { id: "intro", label: "紹介映像", page: "intro" },
+    { id: "bd", label: "ＢＤ", page: "bdSource" },
+    { id: "bdControls", label: "ＢＤ操作", page: "bdDisc", defaultEnabled: false },
+    { id: "hdmi", label: "PC (HDMI)", page: "hdmi" },
+    { id: "vga", label: "PC (VGA)", page: "vga" }
   ];
 
   var activeNavigation = {
     projector: "projector",
     intro: "intro",
     playback: "intro",
-    bdDisc: "bd",
-    bdNavigation: "bd",
+    bdSource: "bd",
+    bdDisc: "bdControls",
+    bdNavigation: "bdControls",
     hdmi: "hdmi",
     vga: "vga"
   };
+
+  function getAvailableNavigation() {
+    var tabConfig = uiConfig.tabs || {};
+    var availableNavigation = [];
+    for (var i = 0; i < navigation.length; i += 1) {
+      var navigationItem = navigation[i];
+      var hasConfiguredValue = Object.prototype.hasOwnProperty.call(tabConfig, navigationItem.id);
+      var isEnabled = hasConfiguredValue
+        ? tabConfig[navigationItem.id] !== false
+        : navigationItem.defaultEnabled !== false;
+      if (isEnabled) availableNavigation.push(navigationItem);
+    }
+    if (availableNavigation.length === 0) {
+      console.error("UI configuration error: at least one tab must be enabled; keeping the projector tab available.");
+      availableNavigation.push(navigation[0]);
+    }
+    return availableNavigation;
+  }
+
+  var availableNavigation = getAvailableNavigation();
+
+  function isNavigationAvailable(navigationId) {
+    var isAvailable = false;
+    for (var i = 0; i < availableNavigation.length; i += 1) {
+      if (availableNavigation[i].id === navigationId) isAvailable = true;
+    }
+    return isAvailable;
+  }
+
+  function isPageAvailable(pageName) {
+    var navigationId = activeNavigation[pageName];
+    return Boolean(navigationId) && isNavigationAvailable(navigationId);
+  }
 
   var introButtons = [
     { ja: "しょうゆの不思議", en: "The Wonders of Shoyu" },
@@ -74,7 +111,7 @@
   var stage = document.getElementById("stage");
   var panelImage = document.getElementById("panel-image");
   var buttonLayer = document.getElementById("hotspots");
-  var currentPage = "projector";
+  var currentPage = availableNavigation[0].page;
   var selectedPlaybackImage = "assets/video-playback-01.png";
   var selectedPlaybackLabel = introButtons[0].ja;
   var selectedPlaybackIndex = 0;
@@ -1231,15 +1268,18 @@
   function preloadPageImages() {
     var pageNames = Object.keys(pages);
     for (var i = 0; i < pageNames.length; i += 1) {
+      if (!isPageAvailable(pageNames[i])) continue;
       var image = new Image();
       image.src = pages[pageNames[i]].image;
       preloadedPageImages.push(image);
     }
 
-    for (var playbackIndex = 0; playbackIndex < introButtons.length; playbackIndex += 1) {
-      var playbackImage = new Image();
-      playbackImage.src = getPlaybackImagePath(playbackIndex);
-      preloadedPageImages.push(playbackImage);
+    if (isNavigationAvailable("intro")) {
+      for (var playbackIndex = 0; playbackIndex < introButtons.length; playbackIndex += 1) {
+        var playbackImage = new Image();
+        playbackImage.src = getPlaybackImagePath(playbackIndex);
+        preloadedPageImages.push(playbackImage);
+      }
     }
   }
 
@@ -1404,32 +1444,35 @@
   }
 
   function addNavigation() {
-    for (var i = 0; i < navigation.length; i += 1) {
-      (function (item) {
+    var navigationCount = availableNavigation.length;
+    for (var i = 0; i < navigationCount; i += 1) {
+      (function (item, itemIndex) {
+        var itemX = Math.round(itemIndex * DESIGN_WIDTH / navigationCount);
+        var nextItemX = Math.round((itemIndex + 1) * DESIGN_WIDTH / navigationCount);
         addButton({
           label: item.label,
           className: "nav-button" + (activeNavigation[currentPage] === item.id ? " active" : ""),
-          x: item.x,
+          x: itemX,
           y: 680,
-          width: 256,
+          width: nextItemX - itemX,
           height: 120,
           content: item.label,
           onClick: function () {
             var isNewSection = activeNavigation[currentPage] !== item.id;
-            if (item.id === "bd") {
-              if (isNewSection) selectSwitcherInputForSection(item.id);
-              handleBdTabTap();
+            if (isNewSection) selectSwitcherInputForSection(item.id);
+            if (item.id === "bd" && !isNewSection) return;
+            if (item.id === "bdControls") {
+              handleBdControlsTabTap();
             } else {
-              if (isNewSection) selectSwitcherInputForSection(item.id);
               showPage(item.id === "intro" && isVideoPlaying ? "playback" : item.page, false);
             }
           }
         });
-      }(navigation[i]));
+      }(availableNavigation[i], i));
     }
   }
 
-  function handleBdTabTap() {
+  function handleBdControlsTabTap() {
     if (currentPage === "bdDisc") {
       showPage("bdNavigation", false);
       return;
@@ -1609,6 +1652,10 @@
 
   function showPage(pageName, useCrossfade) {
     if (!pages[pageName]) return;
+    if (!isPageAvailable(pageName)) {
+      console.warn("Page " + pageName + " is unavailable because its tab is disabled in ui-config.js.");
+      return;
+    }
 
     if (!useCrossfade || pageName === currentPage) {
       renderPage(pageName);
@@ -1680,7 +1727,8 @@
     closeBdSerialPort: closeBdSerialPort
   };
   resizeStage();
-  showPage("projector");
+  showPage(currentPage);
+  if (activeNavigation[currentPage] !== "projector") selectSwitcherInputForSection(activeNavigation[currentPage]);
   loadIntroVideoConfig(function () {
     preloadPageImages();
     if (currentPage === "intro" || currentPage === "playback") renderPage(currentPage);
