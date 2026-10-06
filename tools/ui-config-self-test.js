@@ -122,6 +122,23 @@ assert.strictEqual(configuredNavigation[1].classList.contains("active"), true);
 assert.strictEqual(configuredNavigation[1].style.top, "680px");
 assert.strictEqual(configuredNavigation[1].style.height, "120px");
 
+var startupDisabledPanel = createPanel(
+  { projector: false, intro: true, bd: false, hdmi: true, vga: false },
+  {
+    enabled: true,
+    selectOnStartup: false,
+    inputBySection: { intro: 2, hdmi: 1 },
+    ipAddress: "192.0.2.20",
+    port: 1300,
+    protocol: "udp",
+    timeoutMs: 5000
+  },
+  "intro"
+);
+assert.deepStrictEqual(startupDisabledPanel.switcherCommands, [], "Startup switcher selection must remain disabled");
+navigationButtons(startupDisabledPanel)[1].dispatch("click");
+assert.deepStrictEqual(startupDisabledPanel.switcherCommands, ["1,1\r"], "Tab changes must still select the switcher input");
+
 var fallbackPanel = createPanel({ projector: false, intro: false, bd: false, hdmi: false, vga: false });
 var fallbackNavigation = navigationButtons(fallbackPanel);
 assert.strictEqual(fallbackNavigation.length, 1);

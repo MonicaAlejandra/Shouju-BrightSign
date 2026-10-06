@@ -1790,7 +1790,9 @@
   };
   resizeStage();
   showPage(currentPage);
-  if (activeNavigation[currentPage] !== "projector") selectSwitcherInputForSection(activeNavigation[currentPage]);
+  if (switcherConfig.selectOnStartup !== false && activeNavigation[currentPage] !== "projector") {
+    selectSwitcherInputForSection(activeNavigation[currentPage]);
+  }
   loadIntroVideoConfig(function () {
     preloadPageImages();
     if (currentPage === "intro" || currentPage === "playback") renderPage(currentPage);

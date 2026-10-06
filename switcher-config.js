@@ -6,6 +6,8 @@
 // The unit accepts only one TCP/IP connection at a time.
 window.BRIGHTSIGN_SWITCHER_CONFIG = {
   enabled: true,
+  // Keep false when the switcher is already on the correct input at startup.
+  selectOnStartup: false,
   ipAddress: "192.180.10.113",
   port: 1300,
   protocol: "tcp",
