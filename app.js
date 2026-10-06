@@ -3,10 +3,11 @@
 
   var DESIGN_WIDTH = 1280;
   var DESIGN_HEIGHT = 800;
-  var BUTTON_ACTION_DELAY_MS = 520;
-  var BUTTON_COLOR_REMAINDER_MS = 100;
-  var BUTTON_FEEDBACK_MS = 780;
-  var PAGE_TRANSITION_MS = 700;
+  var DEFAULT_BUTTON_ANIMATION_MS = 620;
+  var DEFAULT_BUTTON_ACTION_DELAY_MS = 520;
+  var DEFAULT_BUTTON_FEEDBACK_MS = 780;
+  var DEFAULT_BUTTON_RETURN_MS = 420;
+  var DEFAULT_PAGE_TRANSITION_MS = 700;
   var UDP_RECEIVER_INITIAL_DELAY_MS = 1500;
   var UDP_RECEIVER_RETRY_MS = 5000;
   var INTRO_VIDEO_CONFIG_TIMEOUT_MS = 3000;
@@ -16,6 +17,48 @@
   var switcherConfig = window.BRIGHTSIGN_SWITCHER_CONFIG || {};
   var blurayConfig = window.BRIGHTSIGN_BLURAY_CONFIG || {};
   var uiConfig = window.BRIGHTSIGN_UI_CONFIG || {};
+
+  function getPageTransitionDuration() {
+    var configuredDuration = Number(uiConfig.pageTransitionMs);
+    var duration = DEFAULT_PAGE_TRANSITION_MS;
+    if (Number.isFinite(configuredDuration) && 100 <= configuredDuration && configuredDuration <= 5000) {
+      duration = Math.round(configuredDuration);
+    } else if (Object.prototype.hasOwnProperty.call(uiConfig, "pageTransitionMs")) {
+      console.warn("UI configuration warning: pageTransitionMs must be between 100 and 5000; using " + DEFAULT_PAGE_TRANSITION_MS + ".");
+    }
+    return duration;
+  }
+
+  function getButtonAnimationDuration() {
+    var configuredDuration = Number(uiConfig.buttonAnimationMs);
+    var duration = DEFAULT_BUTTON_ANIMATION_MS;
+    if (Number.isFinite(configuredDuration) && 100 <= configuredDuration && configuredDuration <= 5000) {
+      duration = Math.round(configuredDuration);
+    } else if (Object.prototype.hasOwnProperty.call(uiConfig, "buttonAnimationMs")) {
+      console.warn("UI configuration warning: buttonAnimationMs must be between 100 and 5000; using " + DEFAULT_BUTTON_ANIMATION_MS + ".");
+    }
+    return duration;
+  }
+
+  function getPageTransitionOverlapDuration() {
+    var configuredDuration = Number(uiConfig.pageTransitionOverlapMs);
+    var duration = BUTTON_COLOR_REMAINDER_MS;
+    if (Number.isFinite(configuredDuration) && 0 <= configuredDuration && configuredDuration <= BUTTON_ANIMATION_MS) {
+      duration = Math.round(configuredDuration);
+    } else if (Object.prototype.hasOwnProperty.call(uiConfig, "pageTransitionOverlapMs")) {
+      console.warn("UI configuration warning: pageTransitionOverlapMs must be between 0 and buttonAnimationMs; using " + BUTTON_COLOR_REMAINDER_MS + ".");
+    }
+    return duration;
+  }
+
+  var PAGE_TRANSITION_MS = getPageTransitionDuration();
+  var BUTTON_ANIMATION_MS = getButtonAnimationDuration();
+  var BUTTON_ACTION_DELAY_MS = Math.round(BUTTON_ANIMATION_MS * DEFAULT_BUTTON_ACTION_DELAY_MS / DEFAULT_BUTTON_ANIMATION_MS);
+  var BUTTON_COLOR_REMAINDER_MS = BUTTON_ANIMATION_MS - BUTTON_ACTION_DELAY_MS;
+  var PAGE_TRANSITION_OVERLAP_MS = getPageTransitionOverlapDuration();
+  var PAGE_BUTTON_ACTION_DELAY_MS = BUTTON_ANIMATION_MS - PAGE_TRANSITION_OVERLAP_MS;
+  var BUTTON_FEEDBACK_MS = Math.round(BUTTON_ANIMATION_MS * DEFAULT_BUTTON_FEEDBACK_MS / DEFAULT_BUTTON_ANIMATION_MS);
+  var BUTTON_RETURN_MS = Math.round(BUTTON_ANIMATION_MS * DEFAULT_BUTTON_RETURN_MS / DEFAULT_BUTTON_ANIMATION_MS);
 
   var pages = {
     projector: { image: "assets/projector-control-panel.png", alt: "プロジェクター操作" },
@@ -138,6 +181,9 @@
   var stage = document.getElementById("stage");
   var panelImage = document.getElementById("panel-image");
   var buttonLayer = document.getElementById("hotspots");
+  stage.style.setProperty("--page-transition-ms", PAGE_TRANSITION_MS + "ms");
+  stage.style.setProperty("--button-animation-ms", BUTTON_ANIMATION_MS + "ms");
+  stage.style.setProperty("--button-return-ms", BUTTON_RETURN_MS + "ms");
   var currentPage = initialNavigation.page;
   var selectedPlaybackLabel = introButtons[0].ja;
   var selectedPlaybackIndex = 0;
@@ -1309,6 +1355,7 @@
   function addButton(options) {
     var button = document.createElement("button");
     var actionTimer = 0;
+    var actionDelayMs = Number.isFinite(options.actionDelayMs) ? Math.max(0, Math.round(options.actionDelayMs)) : BUTTON_ACTION_DELAY_MS;
     var feedbackTimer = 0;
     var feedbackActive = false;
     var pointerPressed = false;
@@ -1351,8 +1398,8 @@
         window.clearTimeout(feedbackTimer);
         if (options.onClick) {
           actionTimer = window.setTimeout(function () {
-            if (!button.disabled) options.onClick();
-          }, BUTTON_ACTION_DELAY_MS);
+            if (!button.disabled && button.isConnected) options.onClick();
+          }, actionDelayMs);
         }
         feedbackTimer = window.setTimeout(function () {
           if (button.isConnected) {
@@ -1557,7 +1604,9 @@
             { className: "ja", text: item.ja },
             { className: "en", text: item.en }
           ],
+          actionDelayMs: PAGE_BUTTON_ACTION_DELAY_MS,
           onClick: function () {
+            if (isVideoPlaying || currentPage !== "intro") return;
             selectedPlaybackIndex = itemIndex;
             selectedPlaybackLabel = item.ja;
             isVideoPlaying = true;
@@ -1589,6 +1638,7 @@
       width: 285,
       height: 86,
       content: "再生中止",
+      actionDelayMs: PAGE_BUTTON_ACTION_DELAY_MS,
       onClick: function () {
         sendUdpCommand(udpCommand("videoStop", "STOP_VIDEO"));
         finishVideoPlayback("STOP button");
@@ -1705,7 +1755,7 @@
     renderPage(pageName);
     void outgoingPage.offsetWidth;
     for (var finishingIndex = 0; finishingIndex < finishingButtons.length; finishingIndex += 1) {
-      finishingButtons[finishingIndex].style.setProperty("transition", "background-color " + BUTTON_COLOR_REMAINDER_MS + "ms linear", "important");
+      finishingButtons[finishingIndex].style.setProperty("transition", "background-color " + PAGE_TRANSITION_OVERLAP_MS + "ms linear", "important");
       finishingButtons[finishingIndex].style.setProperty("background-color", "var(--power-red)", "important");
     }
     stage.classList.add("page-transitioning");

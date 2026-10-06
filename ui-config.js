@@ -5,6 +5,12 @@
 // the panel cannot start with an unusable blank screen.
 window.BRIGHTSIGN_UI_CONFIG = {
   defaultTab: "intro",
+  // Page crossfade duration in milliseconds (100 to 5000).
+  pageTransitionMs: 550,
+  // Button color-animation duration; related command and feedback timing scale with it.
+  buttonAnimationMs: 500,
+  // Time that the button animation and page crossfade run together (0 to buttonAnimationMs).
+  pageTransitionOverlapMs: 160,
   tabs: {
     projector: false,
     intro: true,

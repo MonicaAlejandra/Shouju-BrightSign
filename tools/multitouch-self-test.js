@@ -126,6 +126,11 @@ var context = {
     },
     BRIGHTSIGN_PROJECTOR_CONFIG: {},
     BRIGHTSIGN_SWITCHER_CONFIG: {},
+    BRIGHTSIGN_UI_CONFIG: {
+      buttonAnimationMs: 450,
+      pageTransitionMs: 500,
+      pageTransitionOverlapMs: 160
+    },
     BRIGHTSIGN_BLURAY_CONFIG: {
       enabled: true,
       transport: "udp",
@@ -171,8 +176,13 @@ assert.strictEqual(sentPackets.length, 0, "Ignored second touch must not send a 
 
 introButtons[0].dispatch("pointerup", { pointerId: 1, pointerType: "touch", buttons: 0 });
 introButtons[0].dispatch("click");
-clock.advance(519);
-assert.strictEqual(sentPackets.length, 0, "Accepted command must keep its normal feedback delay");
+clock.advance(100);
+introButtons[1].dispatch("pointerdown", { pointerId: 3, pointerType: "touch", buttons: 1 });
+introButtons[1].dispatch("pointerup", { pointerId: 3, pointerType: "touch", buttons: 0 });
+introButtons[1].dispatch("click");
+introButtons[2].dispatch("click");
+clock.advance(189);
+assert.strictEqual(sentPackets.length, 0, "Accepted command must wait for the configured crossfade overlap");
 clock.advance(1);
 assert.deepStrictEqual(sentPackets, [{ payload: "PLAY_01", port: 5001, ipAddress: "192.0.2.10" }]);
 assert.strictEqual(elements["panel-image"].src, "assets/video-playback.png?v=20261006-2");
@@ -186,8 +196,11 @@ assert.strictEqual(playbackStop.style.width, "285px");
 assert.strictEqual(playbackStop.style.height, "86px");
 assert.strictEqual(elements.hotspots.querySelectorAll(".nav-button")[0].style.top, "736px");
 assert.strictEqual(elements.hotspots.querySelectorAll(".nav-button")[0].style.height, "64px");
-clock.advance(260);
+clock.advance(380);
+assert.strictEqual(sentPackets.length, 1, "Rapid subsequent selections must not send additional play commands");
+assert.strictEqual(elements.hotspots.querySelectorAll(".playback-label")[0].children[0].textContent,
+  "しょうゆの不思議", "Rapid subsequent selections must preserve the first video's title");
 assert.strictEqual(introButtons[0].classList.contains("pressed"), false, "Accepted button must clear red feedback");
-assert.strictEqual(introButtons[1].classList.contains("pressed"), false, "Ignored button must remain clear");
+assert.strictEqual(introButtons[1].classList.contains("pressed"), false, "Subsequent button feedback must clear");
 
-console.log("Multi-touch self-test passed: first touch sent once, second touch was ignored, and feedback cleared.");
+console.log("Multi-touch self-test passed: simultaneous and rapid sequential selections preserve the first video and title.");
