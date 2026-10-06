@@ -19,8 +19,18 @@
 
   var pages = {
     projector: { image: "assets/projector-control-panel.png", alt: "プロジェクター操作" },
-    intro: { image: "assets/intro-video-selection.png?v=20260903-1", alt: "紹介映像 選択" },
-    playback: { image: "assets/video-playback.png", alt: "紹介映像 再生中" },
+    intro: {
+      image: "assets/intro-video-selection.png?v=20261006-3",
+      alt: "紹介映像 選択",
+      navigationY: 736,
+      navigationHeight: 64
+    },
+    playback: {
+      image: "assets/video-playback.png?v=20261006-2",
+      alt: "紹介映像 再生中",
+      navigationY: 736,
+      navigationHeight: 64
+    },
     bdSource: { image: "assets/bd-simple-control.png", alt: "ブルーレイディスク 操作" },
     bdDisc: { image: "assets/bluray-disc-control.png", alt: "ブルーレイディスク 再生操作" },
     bdNavigation: { image: "assets/bluray-navigation.png", alt: "ブルーレイディスク メニュー操作" },
@@ -68,6 +78,23 @@
 
   var availableNavigation = getAvailableNavigation();
 
+  function getInitialNavigation() {
+    var requestedNavigationId = typeof uiConfig.defaultTab === "string" ? uiConfig.defaultTab.trim() : "";
+    var initialNavigation = availableNavigation[0];
+    for (var i = 0; i < availableNavigation.length; i += 1) {
+      if (availableNavigation[i].id === requestedNavigationId) {
+        initialNavigation = availableNavigation[i];
+        break;
+      }
+    }
+    if (requestedNavigationId && initialNavigation.id !== requestedNavigationId) {
+      console.warn("UI configuration warning: defaultTab " + requestedNavigationId + " is unavailable; using " + initialNavigation.id + ".");
+    }
+    return initialNavigation;
+  }
+
+  var initialNavigation = getInitialNavigation();
+
   function isNavigationAvailable(navigationId) {
     var isAvailable = false;
     for (var i = 0; i < availableNavigation.length; i += 1) {
@@ -111,8 +138,7 @@
   var stage = document.getElementById("stage");
   var panelImage = document.getElementById("panel-image");
   var buttonLayer = document.getElementById("hotspots");
-  var currentPage = availableNavigation[0].page;
-  var selectedPlaybackImage = "assets/video-playback-01.png";
+  var currentPage = initialNavigation.page;
   var selectedPlaybackLabel = introButtons[0].ja;
   var selectedPlaybackIndex = 0;
   var isVideoPlaying = false;
@@ -1273,20 +1299,6 @@
       image.src = pages[pageNames[i]].image;
       preloadedPageImages.push(image);
     }
-
-    if (isNavigationAvailable("intro")) {
-      for (var playbackIndex = 0; playbackIndex < introButtons.length; playbackIndex += 1) {
-        var playbackImage = new Image();
-        playbackImage.src = getPlaybackImagePath(playbackIndex);
-        preloadedPageImages.push(playbackImage);
-      }
-    }
-  }
-
-  function getPlaybackImagePath(index) {
-    var number = index + 1;
-    var paddedNumber = number < 10 ? "0" + number : String(number);
-    return "assets/video-playback-" + paddedNumber + ".png";
   }
 
   function resizeStage() {
@@ -1444,6 +1456,9 @@
   }
 
   function addNavigation() {
+    var page = pages[currentPage];
+    var navigationY = page.navigationY || 680;
+    var navigationHeight = page.navigationHeight || 120;
     var navigationCount = availableNavigation.length;
     for (var i = 0; i < navigationCount; i += 1) {
       (function (item, itemIndex) {
@@ -1453,9 +1468,9 @@
           label: item.label,
           className: "nav-button" + (activeNavigation[currentPage] === item.id ? " active" : ""),
           x: itemX,
-          y: 680,
+          y: navigationY,
           width: nextItemX - itemX,
-          height: 120,
+          height: navigationHeight,
           content: item.label,
           onClick: function () {
             var isNewSection = activeNavigation[currentPage] !== item.id;
@@ -1522,28 +1537,28 @@
   }
 
   function addIntroControls() {
-    var columns = [48, 348, 647, 947];
-    var widths = [285, 285, 286, 285];
-    var rows = [134, 224, 314, 404, 494, 584];
+    var columns = [49, 349, 648, 948];
+    var rows = [131, 231, 331, 431, 531, 631];
 
     for (var index = 0; index < introButtons.length; index += 1) {
       (function (item, itemIndex) {
         var column = itemIndex % 4;
         var row = Math.floor(itemIndex / 4);
+        var className = "intro-button" + (item.spare ? " spare-button" : 16 <= itemIndex ? " category-button" : "");
+        if (11 <= item.ja.length) className += " compact-title";
         addButton({
           label: item.ja,
-          className: "intro-button" + (item.spare ? " spare-button" : 16 <= itemIndex ? " category-button" : ""),
+          className: className,
           x: columns[column],
           y: rows[row],
-          width: widths[column],
-          height: 76,
+          width: 283,
+          height: 84,
           contentLines: [
             { className: "ja", text: item.ja },
             { className: "en", text: item.en }
           ],
           onClick: function () {
             selectedPlaybackIndex = itemIndex;
-            selectedPlaybackImage = getPlaybackImagePath(itemIndex);
             selectedPlaybackLabel = item.ja;
             isVideoPlaying = true;
             var prefix = udpCommand("videoPrefix", "PLAY_");
@@ -1560,22 +1575,19 @@
   function addPlaybackControls() {
     var playbackLabel = document.createElement("div");
     var playbackTitle = document.createElement("span");
-    var playbackStatus = document.createElement("span");
     playbackLabel.className = "playback-label";
     playbackLabel.setAttribute("aria-hidden", "true");
     playbackTitle.textContent = selectedPlaybackLabel;
-    playbackStatus.textContent = "再生中";
     playbackLabel.appendChild(playbackTitle);
-    playbackLabel.appendChild(playbackStatus);
     buttonLayer.appendChild(playbackLabel);
 
     addButton({
       label: "再生中止",
       className: "playback-stop",
-      x: 1012,
-      y: 540,
-      width: 220,
-      height: 100,
+      x: 947,
+      y: 630,
+      width: 285,
+      height: 86,
       content: "再生中止",
       onClick: function () {
         sendUdpCommand(udpCommand("videoStop", "STOP_VIDEO"));
@@ -1634,7 +1646,7 @@
     var page = pages[pageName];
     if (!page) return;
     currentPage = pageName;
-    panelImage.src = pageName === "playback" ? selectedPlaybackImage : page.image;
+    panelImage.src = page.image;
     panelImage.alt = pageName === "playback" ? selectedPlaybackLabel + " 再生中" : page.alt;
     buttonLayer.innerHTML = "";
     addNavigation();

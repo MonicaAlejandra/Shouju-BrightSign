@@ -143,18 +143,22 @@ button {
   display: block;
   max-width: 96%;
   overflow: hidden;
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 700;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.intro-button.compact-title .ja {
+  font-size: 20px;
+}
+
 .intro-button .en {
   display: block;
   color: #fff;
   font-family: Arial, sans-serif;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 400;
   line-height: 1.2;
   white-space: nowrap;
@@ -167,16 +171,13 @@ button {
 
 .playback-label {
   position: absolute;
-  top: 320px;
+  top: 375px;
   left: 320px;
   display: flex;
   width: 640px;
-  height: 170px;
+  height: 53px;
   align-items: center;
   justify-content: center;
-  flex-direction: column;
-  gap: 8px;
-  background: #343839;
   color: #fff;
   font-size: 42px;
   font-weight: 700;
@@ -188,9 +189,6 @@ button {
 .playback-label span {
   display: block;
   width: 100%;
-}
-
-.playback-label span:first-child {
   white-space: nowrap;
 }
 
@@ -278,7 +276,10 @@ button {
 
 .page-transition-overlay {
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 64px;
+  left: 0;
   z-index: 10;
   overflow: hidden;
   pointer-events: none;
@@ -319,7 +320,7 @@ button {
 }
 
 .page-transitioning > #panel-image,
-.page-transitioning > #hotspots {
+.page-transitioning > #hotspots > :not(.nav-button) {
   will-change: opacity;
   transform: translateZ(0);
   backface-visibility: hidden;

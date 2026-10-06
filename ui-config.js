@@ -4,13 +4,14 @@
 // tabs are set to false, the application keeps the projector tab available so
 // the panel cannot start with an unusable blank screen.
 window.BRIGHTSIGN_UI_CONFIG = {
+  defaultTab: "intro",
   tabs: {
-    projector: true,
+    projector: false,
     intro: true,
-    bd: true,
+    bd: false,
     // Optional legacy tab with Play/Stop and menu-navigation controls.
     bdControls: false,
-    hdmi: true,
-    vga: true
+    hdmi: false,
+    vga: false
   }
 };

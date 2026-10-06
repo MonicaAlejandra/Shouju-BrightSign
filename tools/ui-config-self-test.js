@@ -35,7 +35,7 @@ function createElementStub() {
   return element;
 }
 
-function createPanel(tabConfig, switcherConfig) {
+function createPanel(tabConfig, switcherConfig, defaultTab) {
   var elements = {
     stage: createElementStub(),
     "panel-image": createElementStub(),
@@ -75,7 +75,7 @@ function createPanel(tabConfig, switcherConfig) {
       BRIGHTSIGN_PROJECTOR_CONFIG: {},
       BRIGHTSIGN_SWITCHER_CONFIG: switcherConfig || {},
       BRIGHTSIGN_UDP_CONFIG: {},
-      BRIGHTSIGN_UI_CONFIG: { tabs: tabConfig },
+      BRIGHTSIGN_UI_CONFIG: { defaultTab: defaultTab, tabs: tabConfig },
       addEventListener: function () {},
       clearInterval: function () {},
       clearTimeout: function () {},
@@ -103,12 +103,24 @@ assert.strictEqual(configuredNavigation[0].style.left, "0px");
 assert.strictEqual(configuredNavigation[0].style.width, "640px");
 assert.strictEqual(configuredNavigation[1].style.left, "640px");
 assert.strictEqual(configuredNavigation[1].style.width, "640px");
-assert.strictEqual(configuredPanel.elements["panel-image"].src, "assets/intro-video-selection.png?v=20260903-1");
+assert.strictEqual(configuredPanel.elements["panel-image"].src, "assets/intro-video-selection.png?v=20261006-3");
+assert.strictEqual(configuredNavigation[0].style.top, "736px");
+assert.strictEqual(configuredNavigation[0].style.height, "64px");
+
+var defaultTabPanel = createPanel(
+  { projector: true, intro: true, bd: false, hdmi: false, vga: false },
+  {},
+  "intro"
+);
+assert.strictEqual(defaultTabPanel.elements["panel-image"].src, "assets/intro-video-selection.png?v=20261006-3");
+assert.strictEqual(navigationButtons(defaultTabPanel)[1].classList.contains("active"), true);
 
 configuredNavigation[1].dispatch("click");
 configuredNavigation = navigationButtons(configuredPanel);
 assert.strictEqual(configuredPanel.elements["panel-image"].src, "assets/pc-hdmi-control.png");
 assert.strictEqual(configuredNavigation[1].classList.contains("active"), true);
+assert.strictEqual(configuredNavigation[1].style.top, "680px");
+assert.strictEqual(configuredNavigation[1].style.height, "120px");
 
 var fallbackPanel = createPanel({ projector: false, intro: false, bd: false, hdmi: false, vga: false });
 var fallbackNavigation = navigationButtons(fallbackPanel);

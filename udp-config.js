@@ -3,7 +3,7 @@
 // safe to test. Commands are UTF-8 text packets with no line ending.
 window.BRIGHTSIGN_UDP_CONFIG = {
   enabled: true,
-  ipAddress: "192.180.10.111",
+  ipAddress: "192.168.0.2",
   port: 5001,
   receiveEnabled: true,
   receiveIpAddress: "0.0.0.0",
