@@ -6,11 +6,11 @@
 window.BRIGHTSIGN_UI_CONFIG = {
   defaultTab: "intro",
   // Page crossfade duration in milliseconds (100 to 5000).
-  pageTransitionMs: 550,
+  pageTransitionMs: 300,
   // Button color-animation duration; related command and feedback timing scale with it.
-  buttonAnimationMs: 500,
+  buttonAnimationMs: 300,
   // Time that the button animation and page crossfade run together (0 to buttonAnimationMs).
-  pageTransitionOverlapMs: 160,
+  pageTransitionOverlapMs: 200,
   tabs: {
     projector: false,
     intro: true,

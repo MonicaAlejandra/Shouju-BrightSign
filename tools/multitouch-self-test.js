@@ -127,9 +127,9 @@ var context = {
     BRIGHTSIGN_PROJECTOR_CONFIG: {},
     BRIGHTSIGN_SWITCHER_CONFIG: {},
     BRIGHTSIGN_UI_CONFIG: {
-      buttonAnimationMs: 450,
-      pageTransitionMs: 500,
-      pageTransitionOverlapMs: 160
+      buttonAnimationMs: 300,
+      pageTransitionMs: 300,
+      pageTransitionOverlapMs: 200
     },
     BRIGHTSIGN_BLURAY_CONFIG: {
       enabled: true,
@@ -171,18 +171,13 @@ assert.strictEqual(introButtons[1].classList.contains("pressed"), false, "Second
 
 introButtons[1].dispatch("pointerup", { pointerId: 2, pointerType: "touch", buttons: 0 });
 introButtons[1].dispatch("click");
-clock.advance(520);
+clock.advance(50);
 assert.strictEqual(sentPackets.length, 0, "Ignored second touch must not send a command");
 
 introButtons[0].dispatch("pointerup", { pointerId: 1, pointerType: "touch", buttons: 0 });
 introButtons[0].dispatch("click");
-clock.advance(100);
-introButtons[1].dispatch("pointerdown", { pointerId: 3, pointerType: "touch", buttons: 1 });
-introButtons[1].dispatch("pointerup", { pointerId: 3, pointerType: "touch", buttons: 0 });
-introButtons[1].dispatch("click");
-introButtons[2].dispatch("click");
-clock.advance(189);
-assert.strictEqual(sentPackets.length, 0, "Accepted command must wait for the configured crossfade overlap");
+clock.advance(49);
+assert.strictEqual(sentPackets.length, 0, "Accepted command must remain aligned to the press-start delay");
 clock.advance(1);
 assert.deepStrictEqual(sentPackets, [{ payload: "PLAY_01", port: 5001, ipAddress: "192.0.2.10" }]);
 assert.strictEqual(elements["panel-image"].src, "assets/video-playback.png?v=20261006-2");
@@ -196,7 +191,12 @@ assert.strictEqual(playbackStop.style.width, "285px");
 assert.strictEqual(playbackStop.style.height, "86px");
 assert.strictEqual(elements.hotspots.querySelectorAll(".nav-button")[0].style.top, "736px");
 assert.strictEqual(elements.hotspots.querySelectorAll(".nav-button")[0].style.height, "64px");
-clock.advance(380);
+
+introButtons[1].dispatch("pointerdown", { pointerId: 3, pointerType: "touch", buttons: 1 });
+introButtons[1].dispatch("pointerup", { pointerId: 3, pointerType: "touch", buttons: 0 });
+introButtons[1].dispatch("click");
+introButtons[2].dispatch("click");
+clock.advance(500);
 assert.strictEqual(sentPackets.length, 1, "Rapid subsequent selections must not send additional play commands");
 assert.strictEqual(elements.hotspots.querySelectorAll(".playback-label")[0].children[0].textContent,
   "しょうゆの不思議", "Rapid subsequent selections must preserve the first video's title");

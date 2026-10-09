@@ -1356,6 +1356,9 @@
     var button = document.createElement("button");
     var actionTimer = 0;
     var actionDelayMs = Number.isFinite(options.actionDelayMs) ? Math.max(0, Math.round(options.actionDelayMs)) : BUTTON_ACTION_DELAY_MS;
+    var actionPreparedOnPress = false;
+    var actionDelayElapsed = false;
+    var usePressStartTiming = Number.isFinite(options.actionDelayMs);
     var feedbackTimer = 0;
     var feedbackActive = false;
     var pointerPressed = false;
@@ -1387,6 +1390,33 @@
         button.classList.remove("deactivating");
       }
 
+      function runAction() {
+        actionPreparedOnPress = false;
+        actionDelayElapsed = false;
+        actionTimer = 0;
+        if (!button.disabled && button.isConnected && options.onClick) options.onClick();
+      }
+
+      function prepareActionFromPress() {
+        if (!usePressStartTiming || !options.onClick) return;
+        window.clearTimeout(actionTimer);
+        actionPreparedOnPress = true;
+        actionDelayElapsed = false;
+        actionTimer = window.setTimeout(function () {
+          actionTimer = 0;
+          actionDelayElapsed = true;
+          if (feedbackActive) runAction();
+        }, actionDelayMs);
+      }
+
+      function cancelPreparedAction() {
+        if (!actionPreparedOnPress) return;
+        window.clearTimeout(actionTimer);
+        actionTimer = 0;
+        actionPreparedOnPress = false;
+        actionDelayElapsed = false;
+      }
+
       function beginFeedback() {
         if (button.disabled || feedbackActive) return false;
         feedbackActive = true;
@@ -1394,12 +1424,14 @@
           button.classList.add("deactivating");
         }
         button.classList.add("pressed");
-        window.clearTimeout(actionTimer);
+        if (!actionPreparedOnPress) window.clearTimeout(actionTimer);
         window.clearTimeout(feedbackTimer);
         if (options.onClick) {
-          actionTimer = window.setTimeout(function () {
-            if (!button.disabled && button.isConnected) options.onClick();
-          }, actionDelayMs);
+          if (actionPreparedOnPress) {
+            if (actionDelayElapsed) runAction();
+          } else {
+            actionTimer = window.setTimeout(runAction, actionDelayMs);
+          }
         }
         feedbackTimer = window.setTimeout(function () {
           if (button.isConnected) {
@@ -1443,6 +1475,7 @@
           button.classList.add("deactivating");
         }
         button.classList.add("pressed");
+        prepareActionFromPress();
         if (typeof button.setPointerCapture === "function") {
           try {
             button.setPointerCapture(event.pointerId);
@@ -1475,14 +1508,20 @@
         if (!pointerPressed || activeActionPointerId !== event.pointerId) return;
         pointerPressed = false;
         releaseActionPointer();
-        if (!feedbackActive) clearPressedState();
+        if (!feedbackActive) {
+          cancelPreparedAction();
+          clearPressedState();
+        }
       });
 
       button.addEventListener("pointerleave", function (event) {
         if (event.pointerType === "mouse" && pointerPressed && event.buttons) {
           pointerPressed = false;
           releaseActionPointer();
-          if (!feedbackActive) clearPressedState();
+          if (!feedbackActive) {
+            cancelPreparedAction();
+            clearPressedState();
+          }
         }
       });
 
