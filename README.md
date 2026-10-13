@@ -116,6 +116,8 @@ Before testing, edit `udp-config.js`:
 3. Send the video-finished command to the BrightSign on UDP port `5001`. BrightAuthor continues to use port `5000`.
 4. Replace the command strings, including `videoFinished`, with the exact commands required by the target device or controller.
 5. Set `enabled: true` for sending and `receiveEnabled: true` for the finish-command receiver.
+6. Set `videoSendTrigger` to `"press"` to start the Play/Stop sequence on the first accepted touch, or `"release"` to wait for a valid touch release. The visual button animation starts on first touch in both modes.
+7. In press mode, set `pressVideoSendTiming` to `"immediate"` to send UDP on first touch or `"crossfade-midpoint"` to send halfway through the page crossfade.
 
 UDP activity is written to the JavaScript console only, so no status label appears on the panel. A normal Chrome/Edge test cannot send or receive UDP; this is expected browser security behavior. The HTML receiver listens on port `5001` so it does not conflict with BrightAuthor's port `5000`. For a local state test, run `BRIGHTSIGN_PANEL.receiveCommand("VIDEO_FINISHED")` in the browser console.
 

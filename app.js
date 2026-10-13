@@ -29,6 +29,30 @@
     return duration;
   }
 
+  function getStopPageTransitionDuration() {
+    var configuredDuration = Number(uiConfig.stopPageTransitionMs);
+    var duration = PAGE_TRANSITION_MS;
+    if (Number.isFinite(configuredDuration) && 100 <= configuredDuration && configuredDuration <= 5000) {
+      duration = Math.round(configuredDuration);
+    } else if (Object.prototype.hasOwnProperty.call(uiConfig, "stopPageTransitionMs")) {
+      console.warn("UI configuration warning: stopPageTransitionMs must be between 100 and 5000; using pageTransitionMs.");
+    }
+    return duration;
+  }
+
+  function getPageTransitionEasing() {
+    var configuredEasing = String(uiConfig.pageTransitionEasing || "standard").trim().toLowerCase();
+    var easing = "cubic-bezier(0.4, 0, 0.2, 1)";
+    if (configuredEasing === "smooth") {
+      easing = "cubic-bezier(0.45, 0, 0.55, 1)";
+    } else if (configuredEasing === "linear") {
+      easing = "linear";
+    } else if (configuredEasing !== "standard") {
+      console.warn('UI configuration warning: pageTransitionEasing must be "smooth", "standard", or "linear"; using "standard".');
+    }
+    return easing;
+  }
+
   function getButtonAnimationDuration() {
     var configuredDuration = Number(uiConfig.buttonAnimationMs);
     var duration = DEFAULT_BUTTON_ANIMATION_MS;
@@ -51,14 +75,55 @@
     return duration;
   }
 
+  function getVideoSendTrigger() {
+    var configuredTrigger = String(udpConfig.videoSendTrigger || "release").trim().toLowerCase();
+    var trigger = "release";
+    if (configuredTrigger === "press" || configuredTrigger === "release") {
+      trigger = configuredTrigger;
+    } else if (Object.prototype.hasOwnProperty.call(udpConfig, "videoSendTrigger")) {
+      console.warn('UDP configuration warning: videoSendTrigger must be "press" or "release"; using "release".');
+    }
+    return trigger;
+  }
+
+  function getPressVideoSendTiming() {
+    var configuredTiming = String(udpConfig.pressVideoSendTiming || "immediate").trim().toLowerCase();
+    var timing = "immediate";
+    if (configuredTiming === "crossfade-midpoint") {
+      timing = configuredTiming;
+    } else if (configuredTiming !== "immediate") {
+      console.warn('UDP configuration warning: pressVideoSendTiming must be "immediate" or "crossfade-midpoint"; using "immediate".');
+    }
+    return timing;
+  }
+
+  function getPressPageTransitionExtraDelay() {
+    var configuredDuration = Number(uiConfig.pressPageTransitionExtraDelayMs);
+    var duration = 0;
+    if (Number.isFinite(configuredDuration) && 0 <= configuredDuration && configuredDuration <= 2000) {
+      duration = Math.round(configuredDuration);
+    } else if (Object.prototype.hasOwnProperty.call(uiConfig, "pressPageTransitionExtraDelayMs")) {
+      console.warn("UI configuration warning: pressPageTransitionExtraDelayMs must be between 0 and 2000; using 0.");
+    }
+    return duration;
+  }
+
   var PAGE_TRANSITION_MS = getPageTransitionDuration();
+  var STOP_PAGE_TRANSITION_MS = getStopPageTransitionDuration();
+  var PAGE_TRANSITION_EASING = getPageTransitionEasing();
   var BUTTON_ANIMATION_MS = getButtonAnimationDuration();
   var BUTTON_ACTION_DELAY_MS = Math.round(BUTTON_ANIMATION_MS * DEFAULT_BUTTON_ACTION_DELAY_MS / DEFAULT_BUTTON_ANIMATION_MS);
   var BUTTON_COLOR_REMAINDER_MS = BUTTON_ANIMATION_MS - BUTTON_ACTION_DELAY_MS;
   var PAGE_TRANSITION_OVERLAP_MS = getPageTransitionOverlapDuration();
   var PAGE_BUTTON_ACTION_DELAY_MS = BUTTON_ANIMATION_MS - PAGE_TRANSITION_OVERLAP_MS;
+  var BUTTON_RED_SETTLE_MS = Math.min(BUTTON_COLOR_REMAINDER_MS, PAGE_TRANSITION_OVERLAP_MS);
   var BUTTON_FEEDBACK_MS = Math.round(BUTTON_ANIMATION_MS * DEFAULT_BUTTON_FEEDBACK_MS / DEFAULT_BUTTON_ANIMATION_MS);
   var BUTTON_RETURN_MS = Math.round(BUTTON_ANIMATION_MS * DEFAULT_BUTTON_RETURN_MS / DEFAULT_BUTTON_ANIMATION_MS);
+  var VIDEO_SEND_TRIGGER = getVideoSendTrigger();
+  var PRESS_VIDEO_SEND_TIMING = getPressVideoSendTiming();
+  var PAGE_TRANSITION_MIDPOINT_MS = Math.round(PAGE_TRANSITION_MS / 2);
+  var STOP_PAGE_TRANSITION_MIDPOINT_MS = Math.round(STOP_PAGE_TRANSITION_MS / 2);
+  var PRESS_PAGE_BUTTON_ACTION_DELAY_MS = PAGE_BUTTON_ACTION_DELAY_MS + getPressPageTransitionExtraDelay();
 
   var pages = {
     projector: { image: "assets/projector-control-panel.png", alt: "プロジェクター操作" },
@@ -182,12 +247,14 @@
   var panelImage = document.getElementById("panel-image");
   var buttonLayer = document.getElementById("hotspots");
   stage.style.setProperty("--page-transition-ms", PAGE_TRANSITION_MS + "ms");
+  stage.style.setProperty("--page-transition-easing", PAGE_TRANSITION_EASING);
   stage.style.setProperty("--button-animation-ms", BUTTON_ANIMATION_MS + "ms");
   stage.style.setProperty("--button-return-ms", BUTTON_RETURN_MS + "ms");
   var currentPage = initialNavigation.page;
   var selectedPlaybackLabel = introButtons[0].ja;
   var selectedPlaybackIndex = 0;
   var isVideoPlaying = false;
+  var videoStopTransitionPending = false;
   var projectorPowerState = "off";
   var projectorAcceptsMute = false;
   var projectorMuteState = false;
@@ -1258,11 +1325,11 @@
     });
   }
 
-  function finishVideoPlayback(source) {
+  function finishVideoPlayback(source, transitionDurationMs) {
     if (!isVideoPlaying) return;
     isVideoPlaying = false;
     console.log("Introduction video finished: " + source);
-    if (currentPage === "playback") showPage("intro", true);
+    if (currentPage === "playback") showPage("intro", true, transitionDurationMs);
   }
 
   function handleIncomingUdpCommand(message) {
@@ -1271,6 +1338,10 @@
 
     console.log("UDP received: " + command);
     if (command === udpCommand("videoFinished", "VIDEO_FINISHED")) {
+      if (videoStopTransitionPending) {
+        console.log("Introduction video finish received during the Stop animation; using the scheduled transition.");
+        return;
+      }
       finishVideoPlayback("UDP " + command);
     }
   }
@@ -1383,20 +1454,22 @@
       button.innerHTML = options.content;
     }
     button.disabled = Boolean(options.disabled);
-
     if (!button.disabled && button.className.indexOf("nav-button") === -1) {
       function clearPressedState() {
         button.classList.remove("pressed");
         button.classList.remove("deactivating");
       }
-
       function runAction() {
         actionPreparedOnPress = false;
         actionDelayElapsed = false;
         actionTimer = 0;
+        pointerPressed = false;
+        releaseActionPointer();
         if (!button.disabled && button.isConnected && options.onClick) options.onClick();
+        if (options.lockInteraction && !stage.classList.contains("page-transitioning")) {
+          stage.classList.remove("interaction-locked");
+        }
       }
-
       function prepareActionFromPress() {
         if (!usePressStartTiming || !options.onClick) return;
         window.clearTimeout(actionTimer);
@@ -1408,7 +1481,6 @@
           if (feedbackActive) runAction();
         }, actionDelayMs);
       }
-
       function cancelPreparedAction() {
         if (!actionPreparedOnPress) return;
         window.clearTimeout(actionTimer);
@@ -1416,7 +1488,6 @@
         actionPreparedOnPress = false;
         actionDelayElapsed = false;
       }
-
       function beginFeedback() {
         if (button.disabled || feedbackActive) return false;
         feedbackActive = true;
@@ -1441,13 +1512,11 @@
         }, BUTTON_FEEDBACK_MS);
         return true;
       }
-
       function releaseActionPointer() {
         if (activeActionButton !== button) return;
         activeActionButton = null;
         activeActionPointerId = null;
       }
-
       function suppressCompatibilityClick() {
         suppressNextClick = true;
         window.clearTimeout(clickSuppressionTimer);
@@ -1456,9 +1525,9 @@
           suppressNextClick = false;
         }, 0);
       }
-
       button.addEventListener("pointerdown", function (event) {
-        if (button.disabled || feedbackActive) return;
+        if (button.disabled || feedbackActive || stage.classList.contains("interaction-locked") ||
+            stage.classList.contains("page-transitioning")) return;
         if (activeActionButton && activeActionButton !== button) {
           ignoredPointerId = event.pointerId;
           return;
@@ -1467,15 +1536,17 @@
           ignoredPointerId = event.pointerId;
           return;
         }
-
         activeActionButton = button;
         activeActionPointerId = event.pointerId;
         pointerPressed = true;
+        if (options.lockInteraction) stage.classList.add("interaction-locked");
         if (options.reverseWhenActive && button.classList.contains("is-active")) {
           button.classList.add("deactivating");
         }
         button.classList.add("pressed");
         prepareActionFromPress();
+        if (options.onPress) options.onPress();
+        if (options.activateOnPress) beginFeedback();
         if (typeof button.setPointerCapture === "function") {
           try {
             button.setPointerCapture(event.pointerId);
@@ -1510,6 +1581,7 @@
         releaseActionPointer();
         if (!feedbackActive) {
           cancelPreparedAction();
+          if (options.lockInteraction) stage.classList.remove("interaction-locked");
           clearPressedState();
         }
       });
@@ -1520,22 +1592,30 @@
           releaseActionPointer();
           if (!feedbackActive) {
             cancelPreparedAction();
+            if (options.lockInteraction) stage.classList.remove("interaction-locked");
             clearPressedState();
           }
         }
       });
 
       button.addEventListener("click", function () {
+        if (stage.classList.contains("interaction-locked") || stage.classList.contains("page-transitioning")) return;
         if (suppressNextClick) {
           window.clearTimeout(clickSuppressionTimer);
           clickSuppressionTimer = 0;
           suppressNextClick = false;
           return;
         }
+        if (options.lockInteraction) stage.classList.add("interaction-locked");
+        if (options.activateOnPress && options.onPress) options.onPress();
         beginFeedback();
       });
     } else if (!button.disabled && options.onClick) {
-      button.addEventListener("click", options.onClick);
+      button.addEventListener("click", function () {
+        if (!stage.classList.contains("interaction-locked") && !stage.classList.contains("page-transitioning")) {
+          options.onClick();
+        }
+      });
     }
 
     buttonLayer.appendChild(button);
@@ -1631,7 +1711,35 @@
         var column = itemIndex % 4;
         var row = Math.floor(itemIndex / 4);
         var className = "intro-button" + (item.spare ? " spare-button" : 16 <= itemIndex ? " category-button" : "");
+        var commandSent = false;
+        var selectionAccepted = false;
+        var sendOnPress = VIDEO_SEND_TRIGGER === "press";
+        var sendAtCrossfadeMidpoint = sendOnPress && PRESS_VIDEO_SEND_TIMING === "crossfade-midpoint";
         if (11 <= item.ja.length) className += " compact-title";
+
+        function sendIntroVideoCommand() {
+          if (commandSent) return;
+          commandSent = true;
+          var prefix = udpCommand("videoPrefix", "PLAY_");
+          var videoNumber = itemIndex + 1;
+          var formattedVideoNumber = videoNumber < 10 ? "0" + videoNumber : String(videoNumber);
+          sendUdpCommand(prefix + formattedVideoNumber);
+        }
+
+        function selectIntroVideo() {
+          if (selectionAccepted) return true;
+          if (isVideoPlaying || currentPage !== "intro") return false;
+          selectionAccepted = true;
+          selectedPlaybackIndex = itemIndex;
+          selectedPlaybackLabel = item.ja;
+          isVideoPlaying = true;
+          return true;
+        }
+
+        function selectIntroVideoOnPress() {
+          if (selectIntroVideo() && !sendAtCrossfadeMidpoint) sendIntroVideoCommand();
+        }
+
         addButton({
           label: item.ja,
           className: className,
@@ -1643,17 +1751,17 @@
             { className: "ja", text: item.ja },
             { className: "en", text: item.en }
           ],
-          actionDelayMs: PAGE_BUTTON_ACTION_DELAY_MS,
+          actionDelayMs: sendOnPress ? PRESS_PAGE_BUTTON_ACTION_DELAY_MS : PAGE_BUTTON_ACTION_DELAY_MS,
+          activateOnPress: sendOnPress,
+          lockInteraction: true,
+          onPress: sendOnPress ? selectIntroVideoOnPress : null,
           onClick: function () {
-            if (isVideoPlaying || currentPage !== "intro") return;
-            selectedPlaybackIndex = itemIndex;
-            selectedPlaybackLabel = item.ja;
-            isVideoPlaying = true;
-            var prefix = udpCommand("videoPrefix", "PLAY_");
-            var videoNumber = itemIndex + 1;
-            var formattedVideoNumber = videoNumber < 10 ? "0" + videoNumber : String(videoNumber);
-            sendUdpCommand(prefix + formattedVideoNumber);
-            showPage("playback", true);
+            if (!sendOnPress && !selectIntroVideo()) return;
+            if (!sendOnPress) sendIntroVideoCommand();
+            if (selectionAccepted && isVideoPlaying) {
+              showPage("playback", true);
+              if (sendAtCrossfadeMidpoint) window.setTimeout(sendIntroVideoCommand, PAGE_TRANSITION_MIDPOINT_MS);
+            }
           }
         });
       }(introButtons[index], index));
@@ -1663,6 +1771,17 @@
   function addPlaybackControls() {
     var playbackLabel = document.createElement("div");
     var playbackTitle = document.createElement("span");
+    var sendOnPress = VIDEO_SEND_TRIGGER === "press";
+    var sendAtCrossfadeMidpoint = sendOnPress && PRESS_VIDEO_SEND_TIMING === "crossfade-midpoint";
+    var stopCommandSent = false;
+
+    function sendVideoStop(waitForScheduledTransition) {
+      if (stopCommandSent) return;
+      stopCommandSent = true;
+      videoStopTransitionPending = Boolean(waitForScheduledTransition);
+      sendUdpCommand(udpCommand("videoStop", "STOP_VIDEO"));
+    }
+
     playbackLabel.className = "playback-label";
     playbackLabel.setAttribute("aria-hidden", "true");
     playbackTitle.textContent = selectedPlaybackLabel;
@@ -1677,10 +1796,17 @@
       width: 285,
       height: 86,
       content: "再生中止",
-      actionDelayMs: PAGE_BUTTON_ACTION_DELAY_MS,
+      actionDelayMs: sendOnPress ? PRESS_PAGE_BUTTON_ACTION_DELAY_MS : PAGE_BUTTON_ACTION_DELAY_MS,
+      activateOnPress: sendOnPress,
+      lockInteraction: true,
+      onPress: sendOnPress && !sendAtCrossfadeMidpoint ? function () { sendVideoStop(true); } : null,
       onClick: function () {
-        sendUdpCommand(udpCommand("videoStop", "STOP_VIDEO"));
-        finishVideoPlayback("STOP button");
+        if (!sendOnPress) sendVideoStop(false);
+        videoStopTransitionPending = false;
+        finishVideoPlayback("STOP button", STOP_PAGE_TRANSITION_MS);
+        if (sendAtCrossfadeMidpoint) {
+          window.setTimeout(function () { sendVideoStop(false); }, STOP_PAGE_TRANSITION_MIDPOINT_MS);
+        }
       }
     });
   }
@@ -1751,7 +1877,28 @@
     }
   }
 
-  function showPage(pageName, useCrossfade) {
+  function getClosestButtonColor(sourceButton, candidateButtons) {
+    var sourceCenterX = parseFloat(sourceButton.style.left) + parseFloat(sourceButton.style.width) / 2;
+    var sourceCenterY = parseFloat(sourceButton.style.top) + parseFloat(sourceButton.style.height) / 2;
+    var closestDistance = Infinity;
+    var closestColor = "";
+
+    for (var candidateIndex = 0; candidateIndex < candidateButtons.length; candidateIndex += 1) {
+      var candidate = candidateButtons[candidateIndex];
+      var candidateCenterX = parseFloat(candidate.style.left) + parseFloat(candidate.style.width) / 2;
+      var candidateCenterY = parseFloat(candidate.style.top) + parseFloat(candidate.style.height) / 2;
+      var horizontalDistance = sourceCenterX - candidateCenterX;
+      var verticalDistance = sourceCenterY - candidateCenterY;
+      var distance = horizontalDistance * horizontalDistance + verticalDistance * verticalDistance;
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestColor = window.getComputedStyle(candidate).backgroundColor;
+      }
+    }
+    return closestColor;
+  }
+
+  function showPage(pageName, useCrossfade, transitionDurationMs) {
     if (!pages[pageName]) return;
     if (!isPageAvailable(pageName)) {
       console.warn("Page " + pageName + " is unavailable because its tab is disabled in ui-config.js.");
@@ -1773,15 +1920,20 @@
     var sourceButtonElements = buttonLayer.querySelectorAll(".ui-button");
     var clonedButtonElements = outgoingButtons.querySelectorAll(".ui-button");
     var finishingButtons = [];
+    var crossfadeDurationMs = transitionDurationMs || PAGE_TRANSITION_MS;
+    var blendStopButtonToIntro = currentPage === "playback" && pageName === "intro";
 
     for (var buttonIndex = 0; buttonIndex < sourceButtonElements.length; buttonIndex += 1) {
       var sourceButton = sourceButtonElements[buttonIndex];
       var clonedButton = clonedButtonElements[buttonIndex];
       clonedButton.style.setProperty("background-color", window.getComputedStyle(sourceButton).backgroundColor, "important");
-      if (sourceButton.classList.contains("pressed")) finishingButtons.push(clonedButton);
+      if (sourceButton.classList.contains("pressed")) {
+        finishingButtons.push({ source: sourceButton, clone: clonedButton });
+      }
     }
 
     outgoingPage.className = "page-transition-overlay transition-page";
+    outgoingPage.style.setProperty("--page-transition-ms", crossfadeDurationMs + "ms");
     outgoingImage.removeAttribute("id");
     outgoingImage.className = "transition-panel-image";
     outgoingButtons.removeAttribute("id");
@@ -1794,15 +1946,29 @@
     renderPage(pageName);
     void outgoingPage.offsetWidth;
     for (var finishingIndex = 0; finishingIndex < finishingButtons.length; finishingIndex += 1) {
-      finishingButtons[finishingIndex].style.setProperty("transition", "background-color " + PAGE_TRANSITION_OVERLAP_MS + "ms linear", "important");
-      finishingButtons[finishingIndex].style.setProperty("background-color", "var(--power-red)", "important");
+      var finishingButton = finishingButtons[finishingIndex];
+      finishingButton.clone.style.setProperty("transition", "background-color " + BUTTON_RED_SETTLE_MS + "ms linear", "important");
+      finishingButton.clone.style.setProperty("background-color", "var(--power-red)", "important");
+      if (blendStopButtonToIntro) {
+        var introButtonsForBlend = buttonLayer.querySelectorAll(".intro-button");
+        var targetColor = getClosestButtonColor(finishingButton.source, introButtonsForBlend);
+        (function (button, color) {
+          window.setTimeout(function () {
+            if (!button.isConnected || !color) return;
+            var blendDurationMs = crossfadeDurationMs - BUTTON_RED_SETTLE_MS;
+            button.style.setProperty("transition", "background-color " + blendDurationMs + "ms " + PAGE_TRANSITION_EASING, "important");
+            button.style.setProperty("background-color", color, "important");
+          }, BUTTON_RED_SETTLE_MS);
+        }(finishingButton.clone, targetColor));
+      }
     }
     stage.classList.add("page-transitioning");
 
     pageTransitionTimer = window.setTimeout(function () {
       stage.classList.remove("page-transitioning");
+      stage.classList.remove("interaction-locked");
       removeTransitionOverlays();
-    }, PAGE_TRANSITION_MS);
+    }, crossfadeDurationMs);
   }
 
   window.addEventListener("resize", resizeStage);

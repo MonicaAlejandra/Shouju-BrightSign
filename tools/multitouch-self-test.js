@@ -12,7 +12,7 @@ function createElementStub() {
     attributes: {},
     children: [],
     listeners: {},
-    style: { setProperty: function () {} },
+    style: { setProperty: function (name, value) { element.style[name] = value; } },
     isConnected: true,
     offsetWidth: 1280,
     setAttribute: function (name, value) { element.attributes[name] = value; },
@@ -122,14 +122,18 @@ var context = {
   },
   window: {
     BRIGHTSIGN_UDP_CONFIG: {
-      enabled: true, ipAddress: "192.0.2.10", port: 5001, receiveEnabled: false, commands: {}
+      enabled: true, ipAddress: "192.0.2.10", port: 5001, videoSendTrigger: "press",
+      pressVideoSendTiming: "crossfade-midpoint", receiveEnabled: false, commands: {}
     },
     BRIGHTSIGN_PROJECTOR_CONFIG: {},
     BRIGHTSIGN_SWITCHER_CONFIG: {},
     BRIGHTSIGN_UI_CONFIG: {
-      buttonAnimationMs: 300,
-      pageTransitionMs: 300,
-      pageTransitionOverlapMs: 200
+      buttonAnimationMs: 480,
+      pageTransitionMs: 240,
+      stopPageTransitionMs: 300,
+      pageTransitionEasing: "smooth",
+      pageTransitionOverlapMs: 180,
+      pressPageTransitionExtraDelayMs: 60
     },
     BRIGHTSIGN_BLURAY_CONFIG: {
       enabled: true,
@@ -143,7 +147,11 @@ var context = {
     clearTimeout: clock.clearTimeout,
     setInterval: clock.setInterval,
     clearInterval: clock.clearInterval,
-    getComputedStyle: function () { return { backgroundColor: "#000" }; }
+    getComputedStyle: function (element) {
+      var backgroundColor = "rgb(211, 47, 47)";
+      if (element.classList.contains("spare-button")) backgroundColor = "rgb(56, 167, 219)";
+      return { backgroundColor: backgroundColor };
+    }
   }
 };
 
@@ -168,6 +176,7 @@ introButtons[0].dispatch("pointerdown", { pointerId: 1, pointerType: "touch", bu
 introButtons[1].dispatch("pointerdown", { pointerId: 2, pointerType: "touch", buttons: 1 });
 assert.strictEqual(introButtons[0].classList.contains("pressed"), true, "First touch should show feedback");
 assert.strictEqual(introButtons[1].classList.contains("pressed"), false, "Second simultaneous touch must be ignored");
+assert.strictEqual(sentPackets.length, 0, "Midpoint mode must not send UDP on the first touch");
 
 introButtons[1].dispatch("pointerup", { pointerId: 2, pointerType: "touch", buttons: 0 });
 introButtons[1].dispatch("click");
@@ -176,10 +185,17 @@ assert.strictEqual(sentPackets.length, 0, "Ignored second touch must not send a 
 
 introButtons[0].dispatch("pointerup", { pointerId: 1, pointerType: "touch", buttons: 0 });
 introButtons[0].dispatch("click");
-clock.advance(49);
-assert.strictEqual(sentPackets.length, 0, "Accepted command must remain aligned to the press-start delay");
+introButtons[1].dispatch("pointerdown", { pointerId: 3, pointerType: "touch", buttons: 1 });
+introButtons[1].dispatch("pointerup", { pointerId: 3, pointerType: "touch", buttons: 0 });
+introButtons[1].dispatch("click");
+assert.strictEqual(introButtons[1].classList.contains("pressed"), false,
+  "Other buttons must remain locked during the pre-crossfade delay");
+assert.strictEqual(sentPackets.length, 0, "Locked buttons must not send commands during the pre-crossfade delay");
+clock.advance(309);
+assert.strictEqual(elements["panel-image"].src, "assets/intro-video-selection.png?v=20261006-3",
+  "The page transition must remain aligned to the press-start delay");
 clock.advance(1);
-assert.deepStrictEqual(sentPackets, [{ payload: "PLAY_01", port: 5001, ipAddress: "192.0.2.10" }]);
+assert.strictEqual(sentPackets.length, 0, "UDP must wait until the crossfade midpoint");
 assert.strictEqual(elements["panel-image"].src, "assets/video-playback.png?v=20261006-2");
 var playbackLabel = elements.hotspots.querySelectorAll(".playback-label")[0];
 assert.strictEqual(playbackLabel.children.length, 1, "Playback must overlay only the selected title");
@@ -191,16 +207,43 @@ assert.strictEqual(playbackStop.style.width, "285px");
 assert.strictEqual(playbackStop.style.height, "86px");
 assert.strictEqual(elements.hotspots.querySelectorAll(".nav-button")[0].style.top, "736px");
 assert.strictEqual(elements.hotspots.querySelectorAll(".nav-button")[0].style.height, "64px");
+playbackStop.dispatch("pointerdown", { pointerId: 5, pointerType: "touch", buttons: 1 });
+assert.strictEqual(playbackStop.classList.contains("pressed"), false, "Incoming buttons must stay locked during the crossfade");
+assert.strictEqual(sentPackets.length, 0, "Incoming buttons must not send commands before the crossfade midpoint");
 
-introButtons[1].dispatch("pointerdown", { pointerId: 3, pointerType: "touch", buttons: 1 });
-introButtons[1].dispatch("pointerup", { pointerId: 3, pointerType: "touch", buttons: 0 });
+introButtons[1].dispatch("pointerdown", { pointerId: 6, pointerType: "touch", buttons: 1 });
+introButtons[1].dispatch("pointerup", { pointerId: 6, pointerType: "touch", buttons: 0 });
 introButtons[1].dispatch("click");
 introButtons[2].dispatch("click");
 clock.advance(500);
+assert.deepStrictEqual(sentPackets, [{ payload: "PLAY_01", port: 5001, ipAddress: "192.0.2.10" }],
+  "Play UDP must send at the crossfade midpoint");
 assert.strictEqual(sentPackets.length, 1, "Rapid subsequent selections must not send additional play commands");
 assert.strictEqual(elements.hotspots.querySelectorAll(".playback-label")[0].children[0].textContent,
   "しょうゆの不思議", "Rapid subsequent selections must preserve the first video's title");
 assert.strictEqual(introButtons[0].classList.contains("pressed"), false, "Accepted button must clear red feedback");
 assert.strictEqual(introButtons[1].classList.contains("pressed"), false, "Subsequent button feedback must clear");
+
+playbackStop.dispatch("pointerdown", { pointerId: 4, pointerType: "touch", buttons: 1 });
+assert.strictEqual(sentPackets.length, 1, "Stop UDP must wait for its crossfade midpoint");
+clock.advance(360);
+assert.strictEqual(elements["panel-image"].src, "assets/intro-video-selection.png?v=20261006-3");
+assert.strictEqual(sentPackets.length, 1, "Stop UDP must not send at the beginning of the crossfade");
+  var stopTransitionOverlay = elements.stage.children[elements.stage.children.length - 1];
+  var clonedStopButton = stopTransitionOverlay.children[1].querySelectorAll(".playback-stop")[0];
+  clock.advance(77);
+  assert.strictEqual(clonedStopButton.style["background-color"], "rgb(56, 167, 219)",
+    "The outgoing Stop button must blend toward the blue button underneath");
+  clock.advance(72);
+assert.strictEqual(sentPackets.length, 1, "Stop UDP must remain pending before the crossfade midpoint");
+clock.advance(1);
+assert.deepStrictEqual(sentPackets[1], { payload: "STOP_VIDEO", port: 5001, ipAddress: "192.0.2.10" },
+  "Stop UDP must send at the crossfade midpoint");
+  clock.advance(149);
+  assert.strictEqual(elements.stage.classList.contains("interaction-locked"), true,
+    "Controls must remain locked until the longer Stop crossfade finishes");
+  clock.advance(1);
+  assert.strictEqual(elements.stage.classList.contains("interaction-locked"), false,
+    "Controls must unlock when the Stop crossfade finishes");
 
 console.log("Multi-touch self-test passed: simultaneous and rapid sequential selections preserve the first video and title.");
