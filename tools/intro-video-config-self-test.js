@@ -45,8 +45,10 @@ function createElementStub() {
 
 var projectRoot = path.join(__dirname, "..");
 var config = JSON.parse(fs.readFileSync(path.join(projectRoot, "intro-videos.json"), "utf8"));
-config.videos[0].ja = "外部設定テスト";
-config.videos[0].en = "External Config Test";
+var fixedNames = config.videos.slice(0, 19);
+config.videos = config.videos.map(function (video) {
+  return { id: video.id, ja: "外部設定テスト " + video.id, en: "External Config Test " + video.id };
+});
 var externalConfigText = "\uFEFF" + JSON.stringify(config, null, 2).replace(/\n/g, "\r\n") + "\r\n";
 var requestedPath = "";
 var elements = {
@@ -96,10 +98,19 @@ var introTab = elements.hotspots.children.filter(function (button) {
 })[0];
 introTab.listeners.click();
 
-var externalButton = elements.hotspots.children.filter(function (button) {
-  return button.attributes["aria-label"] === "外部設定テスト";
-})[0];
-assert.ok(externalButton, "Expected the external JSON name to override the bundled name");
-assert.strictEqual(externalButton.children[1].textContent, "External Config Test");
+var introButtons = elements.hotspots.querySelectorAll(".intro-button");
+assert.strictEqual(introButtons.length, 24);
+fixedNames.forEach(function (video, index) {
+  assert.strictEqual(introButtons[index].attributes["aria-label"], video.ja,
+    "JSON must not rename fixed button " + video.id);
+  assert.strictEqual(introButtons[index].children[1].textContent, video.en);
+});
+for (var index = 19; index < introButtons.length; index += 1) {
+  var id = index + 1;
+  assert.strictEqual(introButtons[index].attributes["aria-label"], "外部設定テスト " + id,
+    "Expected external JSON to rename spare button " + id);
+  assert.strictEqual(introButtons[index].children[1].textContent, "External Config Test " + id);
+  assert.strictEqual(introButtons[index].disabled, false, "Spare buttons must remain enabled");
+}
 
-console.log("Intro-video config self-test passed: BOM and CRLF were accepted and external SD names took priority.");
+console.log("Intro-video config self-test passed: BOM and CRLF were accepted; only spare buttons 20–24 were renamed.");

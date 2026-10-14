@@ -316,11 +316,13 @@
       }
 
       seenIds[id] = true;
-      configuredButtons[id - 1] = {
+      var defaultButton = introButtons[id - 1];
+      // Only spare button names can be changed through the JSON configuration.
+      configuredButtons[id - 1] = defaultButton.spare ? {
         ja: japaneseName,
         en: englishName,
-        spare: introButtons[id - 1].spare
-      };
+        spare: true
+      } : defaultButton;
     }
 
     introButtons = configuredButtons;
