@@ -171,6 +171,27 @@ assert.strictEqual(introButtons[0].style.width, "283px");
 assert.strictEqual(introButtons[0].style.height, "84px");
 assert.strictEqual(introButtons[0].classList.contains("compact-title"), false);
 assert.strictEqual(introButtons[1].classList.contains("compact-title"), true);
+var finalRows = [
+  { ja: "大人用（日本語）", en: "Adult (Japanese)" },
+  { ja: "大人用（日本語短編）", en: "Adult (Japanese – Short)" },
+  { ja: "大人用（英語）", en: "Adult (English)" },
+  { ja: "子ども用", en: "Children" },
+  { ja: "予備（1）", en: "Spare (1)" },
+  { ja: "予備（2）", en: "Spare (2)" },
+  { ja: "予備（3）", en: "Spare (3)" },
+  { ja: "予備（4）", en: "Spare (4)" }
+];
+finalRows.forEach(function (expected, offset) {
+  var button = introButtons[16 + offset];
+  var isSpare = 4 <= offset;
+  assert.strictEqual(button.attributes["aria-label"], expected.ja);
+  assert.strictEqual(button.children[1].textContent, expected.en);
+  assert.strictEqual(button.classList.contains("category-button"), !isSpare);
+  assert.strictEqual(button.classList.contains("spare-button"), isSpare);
+  assert.strictEqual(button.style.left, ["49px", "349px", "648px", "948px"][offset % 4]);
+  assert.strictEqual(button.style.top, isSpare ? "631px" : "531px");
+  assert.strictEqual(button.disabled, false);
+});
 
 introButtons[0].dispatch("pointerdown", { pointerId: 1, pointerType: "touch", buttons: 1 });
 introButtons[1].dispatch("pointerdown", { pointerId: 2, pointerType: "touch", buttons: 1 });
@@ -192,7 +213,7 @@ assert.strictEqual(introButtons[1].classList.contains("pressed"), false,
   "Other buttons must remain locked during the pre-crossfade delay");
 assert.strictEqual(sentPackets.length, 0, "Locked buttons must not send commands during the pre-crossfade delay");
 clock.advance(309);
-assert.strictEqual(elements["panel-image"].src, "assets/intro-video-selection.png?v=20261006-3",
+assert.strictEqual(elements["panel-image"].src, "assets/intro-video-selection.png?v=20261020-1",
   "The page transition must remain aligned to the press-start delay");
 clock.advance(1);
 assert.strictEqual(sentPackets.length, 0, "UDP must wait until the crossfade midpoint");
@@ -227,7 +248,7 @@ assert.strictEqual(introButtons[1].classList.contains("pressed"), false, "Subseq
 playbackStop.dispatch("pointerdown", { pointerId: 4, pointerType: "touch", buttons: 1 });
 assert.strictEqual(sentPackets.length, 1, "Stop UDP must wait for its crossfade midpoint");
 clock.advance(360);
-assert.strictEqual(elements["panel-image"].src, "assets/intro-video-selection.png?v=20261006-3");
+assert.strictEqual(elements["panel-image"].src, "assets/intro-video-selection.png?v=20261020-1");
 assert.strictEqual(sentPackets.length, 1, "Stop UDP must not send at the beginning of the crossfade");
   var stopTransitionOverlay = elements.stage.children[elements.stage.children.length - 1];
   var clonedStopButton = stopTransitionOverlay.children[1].querySelectorAll(".playback-stop")[0];
@@ -246,4 +267,20 @@ assert.deepStrictEqual(sentPackets[1], { payload: "STOP_VIDEO", port: 5001, ipAd
   assert.strictEqual(elements.stage.classList.contains("interaction-locked"), false,
     "Controls must unlock when the Stop crossfade finishes");
 
-console.log("Multi-touch self-test passed: simultaneous and rapid sequential selections preserve the first video and title.");
+finalRows.forEach(function (expected, offset) {
+  var button = elements.hotspots.querySelectorAll(".intro-button")[16 + offset];
+  button.dispatch("pointerdown", { pointerId: 100 + offset, pointerType: "touch", buttons: 1 });
+  button.dispatch("pointerup", { pointerId: 100 + offset, pointerType: "touch", buttons: 0 });
+  button.dispatch("click");
+  clock.advance(1000);
+  var lastPacket = sentPackets[sentPackets.length - 1];
+  assert.strictEqual(lastPacket.payload, "PLAY_" + (17 + offset), "Video commands must follow position order");
+  var title = elements.hotspots.querySelectorAll(".playback-label")[0];
+  assert.strictEqual(title.children[0].textContent, expected.ja, "Playback must use the selected title");
+  var stopButton = elements.hotspots.querySelectorAll(".playback-stop")[0];
+  stopButton.dispatch("pointerdown", { pointerId: 200 + offset, pointerType: "touch", buttons: 1 });
+  clock.advance(1000);
+  assert.strictEqual(sentPackets[sentPackets.length - 1].payload, "STOP_VIDEO");
+});
+
+console.log("Multi-touch self-test passed: first-touch locking and video titles, styling, positions, and commands for buttons 17–24.");

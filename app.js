@@ -128,7 +128,7 @@
   var pages = {
     projector: { image: "assets/projector-control-panel.png", alt: "プロジェクター操作" },
     intro: {
-      image: "assets/intro-video-selection.png?v=20261006-3",
+      image: "assets/intro-video-selection.png?v=20261020-1",
       alt: "紹介映像 選択",
       navigationY: 736,
       navigationHeight: 64
@@ -234,13 +234,13 @@
     { ja: "ロシア語", en: "Russian" },
     { ja: "ポルトガル語", en: "Portuguese" },
     { ja: "大人用（日本語）", en: "Adult (Japanese)" },
+    { ja: "大人用（日本語短編）", en: "Adult (Japanese – Short)" },
     { ja: "大人用（英語）", en: "Adult (English)" },
     { ja: "子ども用", en: "Children" },
     { ja: "予備（1）", en: "Spare (1)", spare: true },
     { ja: "予備（2）", en: "Spare (2)", spare: true },
     { ja: "予備（3）", en: "Spare (3)", spare: true },
-    { ja: "予備（4）", en: "Spare (4)", spare: true },
-    { ja: "予備（5）", en: "Spare (5)", spare: true }
+    { ja: "予備（4）", en: "Spare (4)", spare: true }
   ];
 
   var stage = document.getElementById("stage");

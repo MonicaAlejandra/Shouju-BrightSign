@@ -45,7 +45,7 @@ function createElementStub() {
 
 var projectRoot = path.join(__dirname, "..");
 var config = JSON.parse(fs.readFileSync(path.join(projectRoot, "intro-videos.json"), "utf8"));
-var fixedNames = config.videos.slice(0, 19);
+var fixedNames = config.videos.slice(0, 20);
 config.videos = config.videos.map(function (video) {
   return { id: video.id, ja: "外部設定テスト " + video.id, en: "External Config Test " + video.id };
 });
@@ -105,7 +105,7 @@ fixedNames.forEach(function (video, index) {
     "JSON must not rename fixed button " + video.id);
   assert.strictEqual(introButtons[index].children[1].textContent, video.en);
 });
-for (var index = 19; index < introButtons.length; index += 1) {
+for (var index = 20; index < introButtons.length; index += 1) {
   var id = index + 1;
   assert.strictEqual(introButtons[index].attributes["aria-label"], "外部設定テスト " + id,
     "Expected external JSON to rename spare button " + id);
@@ -113,4 +113,4 @@ for (var index = 19; index < introButtons.length; index += 1) {
   assert.strictEqual(introButtons[index].disabled, false, "Spare buttons must remain enabled");
 }
 
-console.log("Intro-video config self-test passed: BOM and CRLF were accepted; only spare buttons 20–24 were renamed.");
+console.log("Intro-video config self-test passed: BOM and CRLF were accepted; only spare buttons 21–24 were renamed.");

@@ -103,7 +103,7 @@ assert.strictEqual(configuredNavigation[0].style.left, "0px");
 assert.strictEqual(configuredNavigation[0].style.width, "640px");
 assert.strictEqual(configuredNavigation[1].style.left, "640px");
 assert.strictEqual(configuredNavigation[1].style.width, "640px");
-assert.strictEqual(configuredPanel.elements["panel-image"].src, "assets/intro-video-selection.png?v=20261006-3");
+assert.strictEqual(configuredPanel.elements["panel-image"].src, "assets/intro-video-selection.png?v=20261020-1");
 assert.strictEqual(configuredNavigation[0].style.top, "736px");
 assert.strictEqual(configuredNavigation[0].style.height, "64px");
 
@@ -112,7 +112,7 @@ var defaultTabPanel = createPanel(
   {},
   "intro"
 );
-assert.strictEqual(defaultTabPanel.elements["panel-image"].src, "assets/intro-video-selection.png?v=20261006-3");
+assert.strictEqual(defaultTabPanel.elements["panel-image"].src, "assets/intro-video-selection.png?v=20261020-1");
 assert.strictEqual(navigationButtons(defaultTabPanel)[1].classList.contains("active"), true);
 
 configuredNavigation[1].dispatch("click");
